@@ -736,7 +736,7 @@ Both of these are deliberate tradeoffs for the POC context, not oversights. For 
 
 This tool was vibe coded — entirely generated through an iterative conversation between a human and Claude Code (Anthropic). No boilerplate was written by hand. The prompt architecture, scoring model, market context engine, UI, and this README were all produced through natural language instructions and progressively refined in conversation.
 
-It is a demonstration of what a single person with domain knowledge and an AI coding assistant can produce in a few hours. The intent was to explore how far AI-native tooling can go in a domain that traditionally requires large engineering teams and proprietary data feeds.
+It is a demonstration of what a single person with an AI coding assistant can produce in a few hours. The intent was to explore how far AI-native tooling can go in a domain that traditionally requires large engineering teams and proprietary data feeds.
 
 ---
 
