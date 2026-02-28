@@ -710,6 +710,14 @@ No npm. No package.json. No lock file. No build toolchain.
 
 ## Known Constraints
 
+**Single Agent Limitations** Current CMP (Current Market Price) retrieval via the implicit web search tool of Anthropic frequently returns inaccurate or hallucinated data. A single LLM API call lacks the necessary verification loops for high-precision financial data. We will implement a Self-Reflection pattern for output generation to cross-reference search results before finalization. If grounding issues persist, we will move to a Scatter-Gather architecture. In this model, specialized agents will independently verify data using internal self-reflection before a coordinator aggregates the final result.
+
+**Strengthening Explicit Guardrails** The system currently relies on provider-level (Anthropic) safety filters for central guardrail enforcement. This leaves the application vulnerable to adversarial attacks. We will implement an explicit, local guardrail layer. Both the input prompt and the output JSON will undergo validation through a dedicated security shim to ensure schema integrity and prevent malicious execution, regardless of the model provider.
+
+**Client-side timestamp.** `generated_at` is stamped by the browser at response receipt time using `new Date().toISOString()`, overwriting whatever the model returns. The model has no reliable knowledge of the actual wall-clock time and will hallucinate plausible-looking timestamps that are often hours off.
+
+**`anthropic-dangerous-direct-browser-access` header**
+
 The Anthropic API does not support direct browser access as a production pattern. The `anthropic-dangerous-direct-browser-access` header exists for exactly this use case — prototyping and internal tooling — but it means the API key is present in the browser context. This is acceptable for a POC where the key belongs to the person running the tool. It is not acceptable for a multi-user deployment where a shared key would be exposed.
 
 For production deployment, the fetch calls should be proxied through a lightweight backend (a single Express or FastAPI endpoint is sufficient) that holds the key server-side.
