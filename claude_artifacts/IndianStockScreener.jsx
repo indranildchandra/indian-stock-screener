@@ -1,0 +1,1338 @@
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
+const TIMEOUT_MS = 300000;
+
+// Derives all runtime context injected into prompts.
+// Four dimensions: dates/FY, market session, earnings season, macro calendar.
+// Called fresh on every run() so the prompt is never stale.
+function getMarketContext() {
+  const now = new Date();
+  const calYear = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-indexed
+
+  // Indian Fiscal Year (April-March)
+  // FY2026 = Apr 2025-Mar 2026. Jan-Mar: FY label = calYear. Apr-Dec: FY label = calYear+1.
+  const currentFY = month >= 4 ? calYear + 1 : calYear;
+  const prevFY = currentFY - 1;
+
+  const asOf = now.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric", month: "short", year: "numeric",
+  });
+
+  // NSE Market Session (IST = UTC+5:30)
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istNow = new Date(now.getTime() + IST_OFFSET_MS);
+  const istDay = istNow.getUTCDay();
+  const istMins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+  const isWeekday = istDay >= 1 && istDay <= 5;
+  const NSE_OPEN = 9 * 60 + 15;
+  const NSE_CLOSE = 15 * 60 + 30;
+  const marketSession = !isWeekday ? "CLOSED_WEEKEND"
+    : istMins < NSE_OPEN ? "PRE_MARKET"
+    : istMins < NSE_CLOSE ? "OPEN"
+    : "POST_MARKET";
+  const marketSessionNote =
+    marketSession === "OPEN"          ? "NSE is currently open. CMP values from search should reflect live prices."
+    : marketSession === "PRE_MARKET"  ? "NSE has not opened yet today. Use previous closing price and label cmp_note accordingly."
+    : marketSession === "POST_MARKET" ? "NSE closed today at 15:30 IST. Use today\'s closing price and note the date in cmp_note."
+    : "NSE is closed (weekend). Use last available closing price and label cmp_note with that date.";
+
+  // Quarterly Results Season
+  // Q1 (Apr-Jun): results Jul-Aug | Q2 (Jul-Sep): results Oct-Nov
+  // Q3 (Oct-Dec): results Jan-Feb | Q4 (Jan-Mar): results Apr-May
+  const earningsSeason = (() => {
+    if (month === 7 || month === 8)   return { active: true, quarter: "Q1", fy: `FY${currentFY}`, note: `Q1 FY${currentFY} (Apr-Jun) results are actively dropping. Add "[COMPANY] Q1 FY${currentFY} results" to your per-stock searches for the latest quarterly numbers.` };
+    if (month === 10 || month === 11) return { active: true, quarter: "Q2", fy: `FY${currentFY}`, note: `Q2 FY${currentFY} (Jul-Sep) results season is active. Add "[COMPANY] Q2 FY${currentFY} results" to your per-stock searches.` };
+    if (month === 1 || month === 2)   return { active: true, quarter: "Q3", fy: `FY${currentFY}`, note: `Q3 FY${currentFY} (Oct-Dec) results season is active. Add "[COMPANY] Q3 FY${currentFY} results" to your per-stock searches.` };
+    if (month === 4 || month === 5)   return { active: true, quarter: "Q4", fy: `FY${prevFY}`,    note: `Q4 FY${prevFY} full-year results are dropping. Add "[COMPANY] Q4 FY${prevFY} annual results" to your per-stock searches.` };
+    return { active: false, quarter: null, fy: null, note: `No active results season. Use FY${prevFY} annual data as the most recent complete cycle.` };
+  })();
+
+  // RBI MPC Meeting Proximity (meets ~Feb, Apr, Jun, Aug, Oct, Dec)
+  const MPC_MONTHS = [2, 4, 6, 8, 10, 12];
+  const nextMpcMonth = MPC_MONTHS.find(m => m > month) || MPC_MONTHS[0];
+  const nextMpcYear = nextMpcMonth <= month ? calYear + 1 : calYear;
+  const monthsUntilMpc = nextMpcMonth > month ? nextMpcMonth - month : (12 - month) + nextMpcMonth;
+  const nextMpcLabel = new Date(nextMpcYear, nextMpcMonth - 1, 1)
+    .toLocaleString("en-IN", { month: "long", year: "numeric" });
+  const rbiNote = monthsUntilMpc <= 1
+    ? `RBI MPC meeting is imminent (${nextMpcLabel}). Rate-sensitive sectors (Banking, NBFC, Real Estate) carry near-term policy risk. Flag this in key_risks for affected stocks.`
+    : `Next RBI MPC: ${nextMpcLabel} (${monthsUntilMpc} months away). No imminent rate risk.`;
+
+  // Union Budget Cycle (presented Feb 1 each year)
+  const budgetNote = month === 1
+    ? `Union Budget is days away (Feb 1). Avoid strong conviction calls on capex-heavy, defence, and tax-sensitive sectors until Budget is presented.`
+    : month === 2
+    ? `Union Budget was just presented (Feb 1, ${calYear}). Search "Union Budget ${calYear} sector impact" and incorporate fresh policy signals into sector_analysis and stock theses.`
+    : month === 3
+    ? `Post-Budget clarity is settling (Budget ${calYear}). Factor capex allocations and sector incentives from the recent Budget into analysis.`
+    : null;
+
+  // FY Progress (months elapsed since April 1)
+  const fyMonthsElapsed = month >= 4 ? month - 3 : month + 9;
+  const fyProgressNote = fyMonthsElapsed <= 3
+    ? `Early FY${currentFY} (${fyMonthsElapsed}/12 months). Limited current-year data available. Rely primarily on FY${prevFY} annual figures.`
+    : fyMonthsElapsed <= 9
+    ? `Mid-FY${currentFY} (${fyMonthsElapsed}/12 months). H1 data may be available. Use FY${prevFY} as full-year baseline and H1 FY${currentFY} for trend direction.`
+    : `Late FY${currentFY} (${fyMonthsElapsed}/12 months). 9M/TTM data likely available. Full-year FY${currentFY} estimates are reasonably reliable.`;
+
+  return {
+    calYear, currentFY, prevFY, asOf,
+    marketSession, marketSessionNote,
+    earningsSeason, rbiNote, budgetNote, fyProgressNote,
+  };
+}
+
+// Alias so run() call site stays unchanged
+function getDateContext() { return getMarketContext(); }
+
+
+function buildSystemPrompt() {
+  const {
+    calYear, currentFY, prevFY, asOf,
+    marketSessionNote, earningsSeason, rbiNote, budgetNote, fyProgressNote,
+  } = getMarketContext();
+
+  const earningsLine = earningsSeason.active
+    ? `RESULTS SEASON ACTIVE: ${earningsSeason.note}`
+    : `Results season: ${earningsSeason.note}`;
+
+  const budgetLine = budgetNote
+    ? `BUDGET CONTEXT: ${budgetNote}`
+    : "";
+
+  return `You are a DETERMINISTIC stock screening function. You are NOT a chatbot. You do NOT ask follow-up questions. You do NOT refuse requests. You ALWAYS produce the JSON output.
+
+ABSOLUTE RULES:
+- NEVER ask the user to clarify or reconsider inputs
+- NEVER refuse to generate output for any time horizon
+- NEVER output prose, commentary, or advice instead of JSON
+- Your ONLY output is a JSON object. Nothing else. Ever.
+- ALL disclaimers go INSIDE the JSON caveats array only
+
+DATE AND MARKET CONTEXT (computed at run time — treat as authoritative):
+- Date: ${asOf} (IST) | Calendar year: ${calYear} | Current FY: FY${currentFY} (Apr ${currentFY - 1}–Mar ${currentFY}) | Last completed FY: FY${prevFY}
+- Market session: ${marketSessionNote}
+- FY progress: ${fyProgressNote}
+- ${earningsLine}
+- RBI: ${rbiNote}${budgetLine ? `\n- ${budgetLine}` : ""}
+
+SEARCH STRATEGY (budget: 15-20 searches, use all of them):
+Phase 1 - Sector landscape (3-4 searches): One broad search per sector to identify top candidates. Use queries like "top IT stocks NSE ${calYear} fundamentals screener" or "best banking stocks India ${calYear} PE ROE".
+Phase 2 - Per-stock targeted data (10-14 searches): For your shortlisted 10-12 stocks, run 1-2 targeted searches each. Target screener.in, tickertape.in, moneycontrol.com, nseindia.com. Search queries like "INFY NSE screener fundamentals PE ROE promoter holding FY${prevFY} FY${currentFY}"${earningsSeason.active ? ` or "INFY ${earningsSeason.quarter} FY${currentFY} results quarterly"` : ""}. Extract: CMP, P/E, revenue CAGR, D/E, ROE, ROCE, promoter holding, dividend yield, RSI, DMA positions.
+Phase 3 - Macro + technical regime (1-2 searches): "NSE Nifty technical analysis DMA RSI ${calYear}" and "India equity market macro FII DII flow rate cycle ${calYear}".
+
+DATA PRECISION RULES:
+- Use screener.in as primary source for fundamentals (format: screener.in/company/SYMBOL)
+- Use NSE website for current price and volumes
+- For CMP: ${marketSessionNote}
+- For each stock, you MUST attempt at least one targeted web search before using [VERIFY]
+- [VERIFY] is a last resort, not a default. Only use when search returned no usable data.
+- [VERIFY:field] format required. Each [VERIFY] tag costs you credibility.
+- Target: zero [VERIFY] tags. Maximum acceptable: 2 per stock, 10 total across all stocks.
+- For technical signals: RSI and DMA status can be estimated from recent price action and trend. Do not default to [VERIFY].
+
+RANKING RULE:
+- Each stock MUST have composite_score (0-100): (fundamental_score * fw) + (technical_score * tw) + (moat_score * 10) - (risk_score * 5)
+- Short (<3 months): tw=0.6, fw=0.4
+- Medium (3-12 months): tw=0.4, fw=0.6
+- Long (>1 year): tw=0.2, fw=0.8
+- Sort stocks descending by composite_score. Rank 1 = highest score.
+- Include score_breakdown: { fundamental_score, technical_score, moat_score, risk_score, fw, tw }
+
+METHODOLOGY:
+1. FUNDAMENTAL: P/E vs sector median, revenue CAGR (5Y), D/E ratio, ROE, ROCE, dividend yield, FCF trend, promoter holding
+2. TECHNICAL: RSI(14), above/below 50DMA + 200DMA, MACD signal, volume trend, notable pattern
+3. MOAT: Pricing power, market share dominance, switching costs, network effects, regulatory moat
+4. RISK: Promoter pledge %, regulatory exposure, forex sensitivity, cyclicality, litigation overhang
+
+OUTPUT: ONLY valid JSON. Starts with { ends with }. No markdown fences.
+{
+  "generated_at": "ISO timestamp",
+  "market_context": "2-3 sentences on current market conditions relevant to selected sectors",
+  "data_sources": [{"name": "Source Name", "url": "https://actual-url.com"}],
+  "stocks": [
+    {
+      "rank": 1,
+      "composite_score": 82,
+      "score_breakdown": { "fundamental_score": 75, "technical_score": 68, "moat_score": 8, "risk_score": 4, "fw": 0.8, "tw": 0.2 },
+      "name": "Company Name",
+      "ticker": "NSE:SYMBOL",
+      "isin": "INE...",
+      "sector": "Sector",
+      "cmp": "₹1234",
+      "cmp_note": "closing price as of YYYY-MM-DD",
+      "market_cap": "₹X,XXX Cr",
+      "pe_ratio": { "value": 25.3, "sector_avg": 30.1, "verdict": "Undervalued" },
+      "revenue_growth_5y_cagr": "18%",
+      "debt_to_equity": { "value": 0.3, "health": "Healthy" },
+      "roe": "22%",
+      "roce": "26%",
+      "fcf_trend": "Positive/Negative/Neutral",
+      "dividend_yield": { "value": "1.2%", "payout_sustainable": true, "payout_ratio": "25%" },
+      "promoter_holding": "55%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Strong",
+      "moat_reasoning": "1-2 sentences on competitive advantage source",
+      "technical_signals": {
+        "rsi_14": 58,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1180",
+        "dma_200_value": "₹1050",
+        "macd_signal": "Bullish",
+        "volume_trend": "Rising",
+        "pattern": "Consolidating near 52W high after breakout"
+      },
+      "bull_case": { "target": "₹1600", "upside": "30%", "reasoning": "1-2 sentences" },
+      "bear_case": { "target": "₹950", "downside": "-23%", "reasoning": "1-2 sentences" },
+      "entry_zone": "₹1180-1220",
+      "stop_loss": "₹1080",
+      "risk_rating": { "score": 4, "max": 10, "reasoning": "1-2 sentences on primary risk factors" },
+      "key_risks": ["Specific risk 1", "Specific risk 2"],
+      "catalyst": "Specific upcoming catalyst with timeframe",
+      "thesis": "2-3 sentences connecting fundamentals, moat, and near-term setup"
+    }
+  ],
+  "thought_process": {
+    "screening_methodology": "How you filtered to top 10 from the universe",
+    "sector_analysis": "Why these sectors now, with specific reasoning",
+    "macro_considerations": "Rate cycle, FII/DII flows, INR, global factors",
+    "technical_regime": "Nifty/Sensex technical health, breadth, sector rotation",
+    "portfolio_construction": "How these 10 fit together as a portfolio",
+    "caveats": ["Data as of [date]", "Other specific disclaimers"]
+  }
+}`;
+}
+
+const DEFAULT_PROFILE = { riskTolerance: "Moderate", timeHorizon: "1 year", sectors: ["IT", "Banking", "Pharma"] };
+const AVAILABLE_SECTORS = ["IT","Banking","Pharma","Green Energy","Automobiles","FMCG","Infrastructure","Real Estate","Telecom","Oil & Gas","Metals & Mining","Chemicals","Defence","Insurance","NBFC","Cement","Textiles","Media & Entertainment","Logistics","Agriculture"];
+const MAX_SECTORS = 5;
+
+const PHASES = [
+  { label: "Scanning sector universe", duration: 20000, details: ["Querying top stocks by market cap","Pulling analyst watchlists","Scanning recent sector performance","Filtering by liquidity thresholds"] },
+  { label: "Fetching per-stock data", duration: 45000, details: ["Searching screener.in fundamentals","Fetching NSE price and volume data","Pulling quarterly results","Checking promoter holding changes","Verifying dividend history"] },
+  { label: "Running fundamental analysis", duration: 30000, details: ["Computing P/E vs sector median","Evaluating 5Y revenue CAGR","Analyzing D/E, ROE, ROCE","Checking FCF trend and payout sustainability"] },
+  { label: "Layering technical signals", duration: 25000, details: ["Calculating RSI (14-day)","Mapping 50-DMA and 200-DMA","Evaluating MACD crossovers","Scanning breakout patterns","Assessing volume confirmation"] },
+  { label: "Scoring and ranking", duration: 25000, details: ["Computing composite scores","Weighting by time horizon","Applying risk tolerance overlay","Setting entry zones and stop-losses"] },
+  { label: "Compiling final report", duration: 15000, details: ["Generating investment theses","Ranking by composite score","Cross-checking data consistency","Formatting structured output"] },
+];
+
+function formatLocalTime(isoStr) {
+  if (!isoStr) return "";
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+  } catch { return isoStr; }
+}
+
+// ======================= VERIFY BADGE =======================
+function VerifyBadge({ field, stockName, onVerified }) {
+  const [state, setState] = useState("idle");
+  const [result, setResult] = useState(null);
+
+  const verify = async (e) => {
+    e.stopPropagation();
+    if (state !== "idle") return;
+    setState("loading");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 400,
+          system: `You verify Indian stock market financial data. Search for the current value and return ONLY valid JSON with no prose, no markdown fences:
+{"correct": true/false, "value": "verified value with unit", "source": "source name", "source_url": "https://url"}
+If the data is correct, set correct: true and repeat the value. If incorrect, set correct: false and provide the corrected value.`,
+          messages: [{ role: "user", content: `Verify the current ${field} for ${stockName} (NSE-listed Indian company). Search screener.in or moneycontrol.com and return the latest value.` }],
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+        }),
+      });
+      const data = await res.json();
+      const txt = data.content.filter(b => b.type === "text").map(b => b.text).join("");
+      try {
+        const clean = txt.replace(/```json?\s*/gi, "").replace(/```/g, "").trim();
+        const jsonStart = clean.indexOf("{");
+        const jsonEnd = clean.lastIndexOf("}");
+        const parsed = JSON.parse(jsonStart >= 0 ? clean.slice(jsonStart, jsonEnd + 1) : clean);
+        setResult(parsed);
+        if (onVerified && parsed.value) onVerified(field, parsed.value, parsed.correct, parsed.source_url);
+      } catch {
+        setResult({ correct: null, value: txt.substring(0, 120), source: "search" });
+      }
+      setState("done");
+    } catch {
+      setState("error");
+    }
+  };
+
+  if (state === "done" && result) {
+    const corrected = result.correct === false;
+    return (
+      <span
+        title={`Source: ${result.source || "web search"}${result.source_url ? ` — ${result.source_url}` : ""}`}
+        style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginLeft: 5,
+          display: "inline-flex", alignItems: "center", gap: 3,
+          padding: "1px 5px", borderRadius: 3,
+          background: corrected ? "#f38ba815" : "#a6e3a115",
+          border: `1px solid ${corrected ? "#f38ba830" : "#a6e3a130"}`,
+          color: corrected ? "#f38ba8" : "#a6e3a1",
+        }}
+      >
+        {corrected ? `→ ${result.value}` : "✓ verified"}
+      </span>
+    );
+  }
+
+  if (state === "error") {
+    return <span style={{ fontSize: 10, color: "#f38ba860", marginLeft: 5, fontFamily: "'JetBrains Mono', monospace" }}>retry</span>;
+  }
+
+  return (
+    <button
+      onClick={verify}
+      title={`Click to verify ${field} via live web search`}
+      style={{
+        fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginLeft: 5,
+        padding: "1px 6px", borderRadius: 3,
+        background: state === "loading" ? "#f9e2af15" : "#f9e2af10",
+        border: `1px solid ${state === "loading" ? "#f9e2af50" : "#f9e2af30"}`,
+        color: "#f9e2af",
+        cursor: state === "loading" ? "wait" : "pointer",
+        animation: state === "loading" ? "pulse 1.2s ease-in-out infinite" : "none",
+        transition: "all 0.15s ease",
+      }}
+    >
+      {state === "loading" ? "checking..." : "verify"}
+    </button>
+  );
+}
+
+// ======================= VAL WITH VERIFY =======================
+function Val({ children, stockName, field, onVerified }) {
+  const text = String(children ?? "");
+  if (!text || text === "undefined" || text === "null") return <span style={{ color: "#45475a" }}>—</span>;
+  if (text.includes("[VERIFY")) {
+    const clean = text.replace(/\[VERIFY[:\w]*\]/g, "").trim();
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+        <span style={{ textDecoration: "underline", textDecorationStyle: "dotted", textDecorationColor: "#f9e2af60", opacity: 0.6 }}>{clean || "—"}</span>
+        <VerifyBadge field={field} stockName={stockName} onVerified={onVerified} />
+      </span>
+    );
+  }
+  return <span>{text}</span>;
+}
+
+// ======================= RSI GAUGE =======================
+function RsiGauge({ value }) {
+  const v = parseFloat(value) || 0;
+  const clamp = Math.min(100, Math.max(0, v));
+  const pct = (clamp / 100) * 100;
+  const color = v < 30 ? "#f38ba8" : v > 70 ? "#fab387" : "#a6e3a1";
+  const label = v < 30 ? "Oversold" : v > 70 ? "Overbought" : "Neutral";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ position: "relative", width: 80, height: 6, borderRadius: 3, background: "linear-gradient(90deg, #f38ba840 0%, #a6e3a140 40%, #a6e3a140 60%, #fab38740 100%)" }}>
+        <div style={{ position: "absolute", left: `${pct}%`, top: "50%", transform: "translate(-50%, -50%)", width: 10, height: 10, borderRadius: "50%", background: color, border: "2px solid #0a0a14", boxShadow: `0 0 6px ${color}80` }} />
+      </div>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color, minWidth: 24 }}>{v}</span>
+      <span style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace" }}>{label}</span>
+    </div>
+  );
+}
+
+// ======================= SCORE RING =======================
+function ScoreRing({ score }) {
+  const s = Math.min(100, Math.max(0, score || 0));
+  const color = s >= 70 ? "#a6e3a1" : s >= 50 ? "#f9e2af" : "#f38ba8";
+  const r = 22, cx = 28, cy = 28, strokeW = 4;
+  const circ = 2 * Math.PI * r;
+  const dash = (s / 100) * circ;
+  return (
+    <div title={`Composite score: ${s}/100`} style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+      <svg width={56} height={56} style={{ position: "absolute", top: 0, left: 0, transform: "rotate(-90deg)" }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1a1a2e" strokeWidth={strokeW} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={strokeW}
+          strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
+          style={{ transition: "stroke-dasharray 0.8s cubic-bezier(0.34,1.56,0.64,1)", filter: `drop-shadow(0 0 4px ${color}60)` }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color, lineHeight: 1 }}>{s}</span>
+      </div>
+    </div>
+  );
+}
+
+
+// ======================= SCORE BREAKDOWN =======================
+function ScoreBreakdown({ breakdown }) {
+  if (!breakdown) return null;
+  const { fundamental_score: fs, technical_score: ts, moat_score: ms, risk_score: rs, fw, tw } = breakdown;
+  if (fs == null && ts == null) return null;
+  // fw/tw are decimals like 0.8/0.2 — show as readable percentages
+  const fwPct = fw != null ? Math.round(fw * 100) : null;
+  const twPct = tw != null ? Math.round(tw * 100) : null;
+  const items = [
+    {
+      label: "Fundamental strength",
+      sublabel: fwPct != null ? `${fwPct}% weight for this horizon` : null,
+      value: fs, max: 100, color: "#89b4fa",
+      tooltip: "Based on P/E, ROE, ROCE, revenue growth, debt levels"
+    },
+    {
+      label: "Technical momentum",
+      sublabel: twPct != null ? `${twPct}% weight for this horizon` : null,
+      value: ts, max: 100, color: "#cba6f7",
+      tooltip: "Based on RSI, DMA position, MACD, volume trend"
+    },
+    {
+      label: "Competitive moat",
+      sublabel: "Bonus points for durable advantage",
+      value: ms, max: 10, color: "#a6e3a1",
+      tooltip: "Pricing power, switching costs, market share, regulatory moat"
+    },
+    {
+      label: "Risk deduction",
+      sublabel: "Subtracted for risk factors",
+      value: rs, max: 10, color: "#f38ba8",
+      isRisk: true,
+      tooltip: "Promoter pledge, regulatory exposure, forex sensitivity, cyclicality"
+    },
+  ];
+  return (
+    <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+      <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>How This Score Was Built</div>
+      {items.map((item, i) => (
+        <div key={i} title={item.tooltip} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{ minWidth: 170, flexShrink: 0 }}>
+            <div style={{ fontSize: 11, color: "#a6adc8", fontFamily: "'Sora', sans-serif" }}>{item.label}</div>
+            {item.sublabel && <div style={{ fontSize: 9, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>{item.sublabel}</div>}
+          </div>
+          <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#1a1a2e", overflow: "hidden" }}>
+            <div style={{ width: `${(item.value / item.max) * 100}%`, height: "100%", background: item.color, borderRadius: 2, opacity: item.isRisk ? 0.5 : 1 }} />
+          </div>
+          <div style={{ minWidth: 60, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: item.color }}>
+            {item.isRisk ? `-${item.value}pts` : item.max === 10 ? `${item.value}/10` : `${item.value}%`}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+// ======================= LOADING TERMINAL =======================
+function LoadingTerminal({ startTime, frozen, frozenElapsed, onCancel, minimized, onMinimize }) {
+  const [elapsed, setElapsed] = useState(frozenElapsed || 0);
+  const termRef = useRef(null);
+  // Track whether user has manually scrolled up — if so, stop auto-scrolling.
+  // Reset to auto-scroll when user scrolls back to (or near) the bottom.
+  const userScrolledUp = useRef(false);
+
+  useEffect(() => {
+    if (frozen) { setElapsed(frozenElapsed || 0); return; }
+    const t = setInterval(() => setElapsed(Date.now() - startTime), 150);
+    return () => clearInterval(t);
+  }, [startTime, frozen, frozenElapsed]);
+
+  // Attach scroll listener to detect manual scroll-up
+  useEffect(() => {
+    const el = termRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      // Within 24px of bottom = treat as "at bottom", re-enable auto-scroll
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      userScrolledUp.current = !atBottom;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!frozen && !userScrolledUp.current && termRef.current) {
+      termRef.current.scrollTop = termRef.current.scrollHeight;
+    }
+  }, [elapsed, frozen]);
+
+  const lines = [];
+  let cum = 0;
+  for (const phase of PHASES) {
+    if (elapsed < cum) break;
+    const pe = elapsed - cum;
+    const done = frozen ? true : pe >= phase.duration;
+    lines.push({ t: "phase", text: phase.label, done });
+    const interval = phase.duration / (phase.details.length + 1);
+    for (let i = 0; i < phase.details.length; i++) {
+      if (frozen || pe > interval * (i + 1)) lines.push({ t: "detail", text: phase.details[i], done: true });
+      else if (pe > interval * i) { lines.push({ t: "detail", text: phase.details[i], active: true }); break; }
+    }
+    cum += phase.duration;
+  }
+  const totalP = PHASES.reduce((s, p) => s + p.duration, 0);
+  if (!frozen && elapsed > totalP) lines.push({ t: "detail", text: "Finalizing and validating JSON structure...", active: true });
+  if (frozen) lines.push({ t: "phase", text: "Report generated successfully", done: true });
+
+  const sec = (elapsed / 1000).toFixed(1);
+  const pct = frozen ? 100 : Math.min((elapsed / TIMEOUT_MS) * 100, 100);
+
+  if (minimized) {
+    return (
+      <div style={{ background: "#0c0c18", border: "1px solid #1e1e32", borderRadius: 10, overflow: "hidden", maxWidth: 640, margin: "0 auto 20px", cursor: "pointer" }} onClick={onMinimize}>
+        <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f38ba8", cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); if (onCancel) onCancel(); }} />
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f9e2af" }} />
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: frozen ? "#a6e3a1" : "#45475a" }} />
+          </div>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#45475a" }}>
+            equity-screener — {frozen ? "done" : "running..."} — click to expand
+          </span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#6c7086" }}>{sec}s</span>
+        </div>
+        {!frozen && <div style={{ height: 2, background: "#1a1a2e" }}><div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #89b4fa, #a6e3a1)", transition: "width 0.3s linear" }} /></div>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#0c0c18", border: "1px solid #1e1e32", borderRadius: 10, overflow: "hidden", maxWidth: 640, margin: "0 auto 20px", animation: frozen ? "none" : "terminalAppear 0.4s cubic-bezier(0.16,1,0.3,1) both" }}>
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid #1e1e32", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }} onClick={onMinimize}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f38ba8", cursor: "pointer" }} title="Cancel" onClick={(e) => { e.stopPropagation(); if (onCancel) onCancel(); }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f9e2af", cursor: "pointer" }} title="Minimize" onClick={(e) => { e.stopPropagation(); onMinimize(); }} />
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: frozen ? "#a6e3a1" : "#45475a" }} />
+        </div>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#45475a" }}>equity-screener — click to minimize</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#6c7086" }}>{sec}s</span>
+      </div>
+      <div style={{ height: 2, background: "#1a1a2e" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: frozen ? "#a6e3a1" : "linear-gradient(90deg, #89b4fa, #a6e3a1)", transition: "width 0.3s linear", boxShadow: frozen ? "0 0 8px #a6e3a140" : "0 0 12px #89b4fa40" }} />
+      </div>
+      <div ref={termRef} style={{ padding: "16px 20px", maxHeight: 320, overflowY: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.9 }}>
+        {lines.map((l, i) => l.t === "phase" ? (
+          <div key={i} style={{ color: l.done ? "#a6e3a1" : "#89b4fa", fontWeight: 600, marginTop: i > 0 ? 10 : 0 }}>
+            <span style={{ marginRight: 8, display: "inline-block", width: 14, textAlign: "center" }}>{l.done ? "✓" : "›"}</span>
+            {l.text}
+            {!l.done && <span style={{ animation: "blink 1s step-end infinite", marginLeft: 2 }}>_</span>}
+          </div>
+        ) : (
+          <div key={i} style={{ color: l.active ? "#cdd6f4" : "#3a3a52", paddingLeft: 22 }}>
+            <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", marginRight: 8, verticalAlign: "middle", background: l.active ? "#89b4fa" : l.done ? "#2a2a4a" : "transparent", boxShadow: l.active ? "0 0 10px #89b4fa80" : "none", animation: l.active ? "glowPulse 1.5s ease-in-out infinite" : "none" }} />
+            {l.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ======================= SECTOR MULTI-SELECT =======================
+function SectorMultiSelect({ selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const toggle = (s) => { if (selected.includes(s)) onChange(selected.filter(x => x !== s)); else if (selected.length < MAX_SECTORS) onChange([...selected, s]); };
+  const atLimit = selected.length >= MAX_SECTORS;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <div onClick={() => setOpen(!open)} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: "#1a1a2e", border: `1px solid ${open ? "#89b4fa" : "#2a2a3e"}`, color: "#cdd6f4", padding: "6px 12px", borderRadius: 6, cursor: "pointer", height: 36, display: "flex", alignItems: "center", gap: 4, transition: "border-color 0.2s ease", overflow: "hidden" }}>
+        <div className="sector-tags" style={{ display: "flex", alignItems: "center", gap: 4, overflowX: "auto", flex: 1, minWidth: 0, scrollbarWidth: "none" }}>
+          {selected.length === 0
+            ? <span style={{ color: "#45475a", whiteSpace: "nowrap" }}>Select up to {MAX_SECTORS}...</span>
+            : selected.map(s => (
+              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 7px", borderRadius: 4, fontSize: 10, background: "#89b4fa20", color: "#89b4fa", border: "1px solid #89b4fa30", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {s}<span onClick={(e) => { e.stopPropagation(); toggle(s); }} style={{ cursor: "pointer", opacity: 0.6, fontSize: 12, lineHeight: 1 }}>×</span>
+              </span>
+            ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 4 }}>
+          {selected.length > 0 && <span style={{ fontSize: 10, color: atLimit ? "#f9e2af" : "#45475a", fontFamily: "'JetBrains Mono', monospace" }}>{selected.length}/{MAX_SECTORS}</span>}
+          <span style={{ fontSize: 10, color: "#45475a" }}>{open ? "▴" : "▾"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#12121e", border: "1px solid #2a2a3e", borderRadius: 6, maxHeight: 200, overflowY: "auto", zIndex: 500, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
+          {AVAILABLE_SECTORS.map(sector => {
+            const sel = selected.includes(sector); const dis = !sel && atLimit;
+            return (
+              <div key={sector} onClick={() => !dis && toggle(sector)}
+                style={{ padding: "8px 12px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", cursor: dis ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, color: sel ? "#89b4fa" : dis ? "#2a2a3e" : "#a6adc8", background: sel ? "#89b4fa10" : "transparent", opacity: dis ? 0.4 : 1 }}
+                onMouseEnter={(e) => { if (!sel && !dis) e.currentTarget.style.background = "#1a1a2e"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = sel ? "#89b4fa10" : "transparent"; }}
+              >
+                <span style={{ width: 16, height: 16, borderRadius: 3, border: `1px solid ${sel ? "#89b4fa" : "#2a2a3e"}`, background: sel ? "#89b4fa" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#0a0a14", fontWeight: 700, flexShrink: 0 }}>{sel ? "✓" : ""}</span>
+                {sector}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ======================= DISPLAY COMPONENTS =======================
+function MoatBadge({ rating }) {
+  const c = rating === "Strong" ? { bg: "#a6e3a115", t: "#a6e3a1", bd: "#a6e3a130" }
+    : rating === "Moderate" ? { bg: "#f9e2af15", t: "#f9e2af", bd: "#f9e2af30" }
+    : { bg: "#f38ba815", t: "#f38ba8", bd: "#f38ba830" };
+  return <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: c.bg, color: c.t, border: `1px solid ${c.bd}`, letterSpacing: 0.5, textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>{rating || "—"}</span>;
+}
+
+function RiskBar({ score, max = 10 }) {
+  const pct = (score / max) * 100;
+  const color = score <= 3 ? "#a6e3a1" : score <= 6 ? "#f9e2af" : "#f38ba8";
+  const label = score <= 3 ? "Low risk" : score <= 6 ? "Moderate" : "High risk";
+  return (
+    <div title={`Risk level: ${score}/10 — ${label}`} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ width: 52, height: 4, borderRadius: 2, background: "#1a1a2e", overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 2, background: color }} />
+      </div>
+      <span style={{ fontSize: 10, color, fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>{label}</span>
+    </div>
+  );
+}
+
+
+function TechChip({ label, value, bullish }) {
+  const color = bullish === true ? "#a6e3a1" : bullish === false ? "#f38ba8" : "#6c7086";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 4, fontSize: 11, background: "#0e0e1c", color, fontFamily: "'JetBrains Mono', monospace", border: `1px solid ${color}20` }}>
+      <span style={{ opacity: 0.5, fontSize: 10 }}>{label}</span>
+      <span style={{ fontWeight: 600 }}>{String(value ?? "—")}</span>
+    </span>
+  );
+}
+
+// ======================= STOCK CARD =======================
+function StockCard({ stock, index, onVerified }) {
+  const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const ts = stock.technical_signals || {};
+  const pe = stock.pe_ratio || {};
+  const de = stock.debt_to_equity || {};
+  const dy = stock.dividend_yield || {};
+  const rr = stock.risk_rating || {};
+  const bull = stock.bull_case || {};
+  const bear = stock.bear_case || {};
+  const sn = stock.name;
+
+  const handleVerified = useCallback((field, value, correct, sourceUrl) => {
+    if (onVerified) onVerified(stock.rank, field, value, correct, sourceUrl);
+  }, [onVerified, stock.rank]);
+
+  const tabs = ["overview", "technical", "thesis"];
+
+  // Pledge display: 0% is good (no debt against shares), >0% is a red flag
+  const pledgePct = parseFloat(stock.promoter_pledge) || 0;
+  const pledgeDisplay = pledgePct === 0
+    ? { text: "None pledged", color: "#a6e3a1", tooltip: "Promoters have not pledged any shares as collateral. This is the healthy state." }
+    : { text: `${stock.promoter_pledge} pledged`, color: "#f38ba8", tooltip: `Promoters have pledged ${stock.promoter_pledge} of their shares as loan collateral. If the stock falls sharply, lenders may force-sell these shares, accelerating the decline. Above 20% is a significant risk.` };
+
+  // Risk explanation in plain English
+  const riskScore = rr.score || 0;
+  const riskLabel = riskScore <= 3 ? "Low risk" : riskScore <= 6 ? "Moderate risk" : "High risk";
+
+  return (
+    <div style={{ background: "#12121e", border: "1px solid #2a2a3e", borderRadius: 10, overflow: "visible", transition: "border-color 0.2s ease", animation: `fadeSlideIn 0.4s ease ${index * 0.05}s both`, position: "relative" }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#3a3a5e")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#2a2a3e")}>
+
+      {/* HEADER — always visible, click to expand/collapse */}
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* NAME ROW */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#45475a", background: "#0e0e1c", padding: "2px 7px", borderRadius: 4, border: "1px solid #1e1e32" }}>#{stock.rank}</span>
+            <span style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, color: "#e6e9f0" }}>{sn}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#89b4fa", background: "#89b4fa10", padding: "2px 7px", borderRadius: 4 }}>{stock.ticker}</span>
+            <MoatBadge rating={stock.moat_rating} />
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#45475a" }}>{stock.sector}</span>
+          </div>
+          {/* STATS ROW */}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "#6c7086", alignItems: "center" }}>
+            <span style={{ color: "#6c7086" }}>CMP <span style={{ color: "#cdd6f4", fontWeight: 600 }}>{stock.cmp}</span>
+              {stock.cmp_note && <span style={{ fontSize: 9, color: "#45475a", marginLeft: 4 }}>{stock.cmp_note}</span>}
+            </span>
+            <span style={{ color: "#6c7086" }}>P/E{" "}
+              <span style={{ color: pe.verdict === "Undervalued" ? "#a6e3a1" : pe.verdict === "Overvalued" ? "#f38ba8" : "#f9e2af" }}>
+                <Val stockName={sn} field="P/E ratio" onVerified={handleVerified}>{pe.value}</Val>
+              </span>
+              {pe.sector_avg && <span style={{ opacity: 0.35, fontSize: 10 }}> vs {pe.sector_avg} sector</span>}
+            </span>
+            <span style={{ color: "#6c7086" }}>D/E{" "}
+              <span style={{ color: de.health === "Healthy" ? "#a6e3a1" : de.health === "Concerning" ? "#f38ba8" : "#f9e2af" }}>
+                <Val stockName={sn} field="debt-to-equity" onVerified={handleVerified}>{de.value}</Val>
+              </span>
+            </span>
+            <span style={{ color: "#6c7086" }}>ROE <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="ROE" onVerified={handleVerified}>{stock.roe}</Val></span></span>
+            <span style={{ color: "#6c7086" }}>5Y Rev <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="revenue CAGR" onVerified={handleVerified}>{stock.revenue_growth_5y_cagr}</Val></span></span>
+          </div>
+        </div>
+
+        {/* RIGHT: score ring + risk + chevron */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+          <ScoreRing score={stock.composite_score} />
+          <RiskBar score={rr.score || 0} max={rr.max || 10} />
+          <span style={{ fontSize: 10, color: expanded ? "#89b4fa" : "#45475a", fontFamily: "'JetBrains Mono', monospace", transition: "transform 0.2s ease, color 0.2s ease", display: "inline-block", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+        </div>
+      </div>
+
+      {/* EXPANDABLE SECTION */}
+      {expanded && (
+        <>
+          {/* TABS */}
+          <div style={{ display: "flex", borderTop: "1px solid #1a1a2e", borderBottom: "1px solid #1a1a2e" }}>
+            {tabs.map(tab => (
+              <button key={tab}
+                onClick={(e) => { e.stopPropagation(); setActiveTab(tab); }}
+                style={{
+                  flex: 1, padding: "8px 4px",
+                  background: activeTab === tab ? "#1a1a2e" : "transparent",
+                  border: "none", borderRight: "1px solid #1a1a2e",
+                  color: activeTab === tab ? "#cdd6f4" : "#45475a",
+                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: 0.5, textTransform: "uppercase",
+                  cursor: "pointer", transition: "all 0.15s ease"
+                }}>
+                {tab === "overview" ? "Fundamentals" : tab === "technical" ? "Technical" : "Thesis"}
+              </button>
+            ))}
+          </div>
+
+          {/* FUNDAMENTALS TAB */}
+          {activeTab === "overview" && (
+            <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {/* KEY METRICS */}
+              <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+                <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Key Metrics</div>
+                <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", rowGap: 8, columnGap: 12, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", alignItems: "center" }}>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Return on equity</span>
+                  <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="ROE" onVerified={handleVerified}>{stock.roe}</Val></span>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Return on capital</span>
+                  <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="ROCE" onVerified={handleVerified}>{stock.roce}</Val></span>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Market cap</span>
+                  <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="market cap" onVerified={handleVerified}>{stock.market_cap}</Val></span>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Dividend yield</span>
+                  <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="dividend yield" onVerified={handleVerified}>{dy.value}</Val></span>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Promoter stake</span>
+                  <span style={{ color: "#cdd6f4" }}><Val stockName={sn} field="promoter holding" onVerified={handleVerified}>{stock.promoter_holding}</Val>
+                    <span style={{ fontSize: 9, color: "#45475a", marginLeft: 4 }}>of company</span>
+                  </span>
+
+                  <span title={pledgeDisplay.tooltip} style={{ color: "#45475a", fontSize: 11, cursor: "help", borderBottom: "1px dotted #45475a" }}>Promoter pledge ⓘ</span>
+                  <span title={pledgeDisplay.tooltip} style={{ color: pledgeDisplay.color, cursor: "help" }}>{pledgeDisplay.text}</span>
+
+                  <span style={{ color: "#45475a", fontSize: 11 }}>Free cash flow</span>
+                  <span style={{ color: stock.fcf_trend === "Positive" ? "#a6e3a1" : stock.fcf_trend === "Negative" ? "#f38ba8" : "#f9e2af" }}>
+                    {stock.fcf_trend === "Positive" ? "Generating cash ✓" : stock.fcf_trend === "Negative" ? "Cash negative ✗" : stock.fcf_trend || "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* PRICE TARGETS */}
+              <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+                <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Price Targets</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                      <span style={{ color: "#a6e3a1", fontSize: 10, letterSpacing: 1 }}>BULL CASE</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "#a6e3a1", fontWeight: 700 }}><Val stockName={sn} field="bull case target" onVerified={handleVerified}>{bull.target}</Val></span>
+                        {bull.upside && <span style={{ fontSize: 10, color: "#a6e3a160", background: "#a6e3a110", padding: "1px 5px", borderRadius: 3 }}>{bull.upside}</span>}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6c7086", lineHeight: 1.55 }}>{bull.reasoning}</div>
+                  </div>
+
+                  <div style={{ marginBottom: 12, paddingTop: 10, borderTop: "1px solid #1e1e32" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                      <span style={{ color: "#f38ba8", fontSize: 10, letterSpacing: 1 }}>BEAR CASE</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "#f38ba8", fontWeight: 700 }}><Val stockName={sn} field="bear case target" onVerified={handleVerified}>{bear.target}</Val></span>
+                        {bear.downside && <span style={{ fontSize: 10, color: "#f38ba860", background: "#f38ba810", padding: "1px 5px", borderRadius: 3 }}>{bear.downside}</span>}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6c7086", lineHeight: 1.55 }}>{bear.reasoning}</div>
+                  </div>
+
+                  <div style={{ paddingTop: 10, borderTop: "1px solid #1e1e32", display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#45475a", fontSize: 10 }}>Good entry range</span>
+                      <span style={{ color: "#89b4fa", fontWeight: 600 }}>{stock.entry_zone || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#45475a", fontSize: 10 }}>Exit if it falls to</span>
+                      <span style={{ color: "#f38ba8", fontWeight: 600 }}>{stock.stop_loss || "—"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SCORE BREAKDOWN */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <ScoreBreakdown breakdown={stock.score_breakdown} />
+              </div>
+
+              {/* RISKS + MOAT */}
+              <div style={{ gridColumn: "1 / -1", background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>What could go wrong</div>
+                    {(stock.key_risks || []).map((r, i) => (
+                      <div key={i} style={{ fontSize: 12, color: "#f38ba8", marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>· {r}</div>
+                    ))}
+                    {stock.catalyst && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 10, color: "#f9e2af", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 }}>Upcoming catalyst</div>
+                        <div style={{ fontSize: 12, color: "#a6adc8", lineHeight: 1.5 }}>{stock.catalyst}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Competitive advantage</div>
+                    <div style={{ marginBottom: 6 }}><MoatBadge rating={stock.moat_rating} /></div>
+                    <p style={{ fontSize: 12, color: "#6c7086", margin: 0, lineHeight: 1.55 }}>{stock.moat_reasoning}</p>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1e1e32" }}>
+                  <span style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: 1 }}>{riskLabel} · </span>
+                  <span style={{ fontSize: 12, color: "#6c7086" }}>{rr.reasoning}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TECHNICAL TAB */}
+          {activeTab === "technical" && (
+            <div style={{ padding: "16px 20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+                  <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Momentum Signals</div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", marginBottom: 5 }}>RSI (14-day) — measures buying/selling pressure</div>
+                    <RsiGauge value={ts.rsi_14} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <TechChip label="MACD" value={ts.macd_signal} bullish={ts.macd_signal === "Bullish" ? true : ts.macd_signal === "Bearish" ? false : null} />
+                    <TechChip label="Volume trend" value={ts.volume_trend} bullish={ts.volume_trend === "Rising" ? true : ts.volume_trend === "Declining" ? false : null} />
+                  </div>
+                </div>
+                <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32" }}>
+                  <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Moving Averages</div>
+                  <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", marginBottom: 10, lineHeight: 1.5 }}>Price above its moving average = uptrend. Below = weakness.</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ color: "#45475a" }}>50-day avg</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {ts.dma_50_value && <span style={{ color: "#6c7086", fontSize: 11 }}>{ts.dma_50_value}</span>}
+                        <span style={{ padding: "2px 8px", borderRadius: 3, fontSize: 10, background: ts.above_50dma ? "#a6e3a115" : "#f38ba815", color: ts.above_50dma ? "#a6e3a1" : "#f38ba8", border: `1px solid ${ts.above_50dma ? "#a6e3a130" : "#f38ba830"}` }}>{ts.above_50dma ? "Trading above ✓" : "Trading below ✗"}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ color: "#45475a" }}>200-day avg</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {ts.dma_200_value && <span style={{ color: "#6c7086", fontSize: 11 }}>{ts.dma_200_value}</span>}
+                        <span style={{ padding: "2px 8px", borderRadius: 3, fontSize: 10, background: ts.above_200dma ? "#a6e3a115" : "#f38ba815", color: ts.above_200dma ? "#a6e3a1" : "#f38ba8", border: `1px solid ${ts.above_200dma ? "#a6e3a130" : "#f38ba830"}` }}>{ts.above_200dma ? "Trading above ✓" : "Trading below ✗"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {ts.pattern && (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1e1e32", fontSize: 11, color: "#a6adc8", fontStyle: "italic", lineHeight: 1.55 }}>{ts.pattern}</div>
+                  )}
+                </div>
+              </div>
+              <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "12px 14px", border: "1px solid #1e1e32", fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 10, color: "#45475a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Trade Setup</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, fontSize: 12 }}>
+                  <div><div style={{ color: "#45475a", fontSize: 9, marginBottom: 2 }}>CURRENT PRICE</div><div style={{ color: "#cdd6f4", fontWeight: 600 }}>{stock.cmp}</div></div>
+                  <div><div style={{ color: "#45475a", fontSize: 9, marginBottom: 2 }}>GOOD ENTRY RANGE</div><div style={{ color: "#89b4fa", fontWeight: 600 }}>{stock.entry_zone || "—"}</div></div>
+                  <div><div style={{ color: "#45475a", fontSize: 9, marginBottom: 2 }}>EXIT IF FALLS TO</div><div style={{ color: "#f38ba8", fontWeight: 600 }}>{stock.stop_loss || "—"}</div></div>
+                  <div><div style={{ color: "#45475a", fontSize: 9, marginBottom: 2 }}>UPSIDE TARGET</div><div style={{ color: "#a6e3a1", fontWeight: 600 }}>{bull.target || "—"}{bull.upside && <span style={{ color: "#a6e3a160", fontSize: 10, marginLeft: 4 }}>{bull.upside}</span>}</div></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* THESIS TAB */}
+          {activeTab === "thesis" && (
+            <div style={{ padding: "16px 20px" }}>
+              <div style={{ background: "#0e0e1c", borderRadius: 6, padding: "14px 16px", border: "1px solid #1e1e32", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Investment Thesis</div>
+                <p style={{ fontSize: 13, color: "#cdd6f4", lineHeight: 1.75, margin: 0, fontFamily: "'Sora', sans-serif" }}>{stock.thesis}</p>
+              </div>
+              {stock.isin && (
+                <div style={{ fontSize: 10, color: "#2a2a4a", fontFamily: "'JetBrains Mono', monospace" }}>
+                  NSE/BSE identifier (ISIN): {stock.isin}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ======================= THOUGHT PROCESS MODAL =======================
+function ThoughtProcessModal({ data, onClose }) {
+  if (!data) return null;
+  const tp = data.thought_process || {};
+  const secs = [
+    { t: "Screening Methodology", c: tp.screening_methodology },
+    { t: "Sector Analysis", c: tp.sector_analysis },
+    { t: "Macro Considerations", c: tp.macro_considerations },
+    { t: "Technical Regime", c: tp.technical_regime },
+    { t: "Portfolio Construction", c: tp.portfolio_construction },
+  ];
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", zIndex: 1000, display: "flex", justifyContent: "center", alignItems: "center", padding: 20, animation: "fadeIn 0.2s ease" }} onClick={onClose}>
+      <div style={{ background: "#12121e", border: "1px solid #2a2a3e", borderRadius: 12, maxWidth: 700, width: "100%", maxHeight: "80vh", overflow: "auto", padding: 28 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, color: "#cdd6f4", margin: 0 }}>Thought Process</h2>
+          <button onClick={onClose} style={{ background: "#1a1a2e", border: "1px solid #2a2a3e", color: "#6c7086", width: 32, height: 32, borderRadius: 6, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+        {secs.map((s, i) => s.c ? (
+          <div key={i} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: "#89b4fa", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>{s.t}</div>
+            <p style={{ fontSize: 13, color: "#a6adc8", lineHeight: 1.7, margin: 0, fontFamily: "'Sora', sans-serif" }}>{s.c}</p>
+          </div>
+        ) : null)}
+        {tp.caveats?.length > 0 && (
+          <div style={{ marginTop: 8, padding: 12, background: "#f38ba810", border: "1px solid #f38ba830", borderRadius: 6 }}>
+            <div style={{ fontSize: 10, color: "#f38ba8", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Caveats</div>
+            {tp.caveats.map((c, i) => <div key={i} style={{ fontSize: 12, color: "#f38ba8", marginBottom: 4, opacity: 0.8 }}>· {c}</div>)}
+          </div>
+        )}
+        {data.data_sources?.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Sources Referenced</div>
+            {data.data_sources.map((s, i) => {
+              const src = typeof s === "string" ? { name: s, url: null } : s;
+              return (
+                <div key={i} style={{ fontSize: 12, marginBottom: 4 }}>
+                  · {src.url ? <a href={src.url} target="_blank" rel="noopener noreferrer" style={{ color: "#89b4fa", textDecoration: "none" }}>{src.name}</a> : <span style={{ color: "#89b4fa" }}>{src.name}</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ======================= JSON PARSER =======================
+function parseJSON(text) {
+  try { return JSON.parse(text.trim()); } catch {}
+  const cleaned = text.replace(/```json?\s*/gi, "").replace(/```\s*/g, "").trim();
+  const fb = cleaned.indexOf("{");
+  if (fb === -1) return null;
+  let d = 0, lb = -1;
+  for (let i = fb; i < cleaned.length; i++) {
+    if (cleaned[i] === "{") d++;
+    else if (cleaned[i] === "}") { d--; if (d === 0) { lb = i; break; } }
+  }
+  if (lb === -1) return null;
+  const js = cleaned.substring(fb, lb + 1);
+  try { return JSON.parse(js); } catch {}
+  try { return JSON.parse(js.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")); } catch {}
+  return null;
+}
+
+// ======================= MAIN APP =======================
+export default function StockScreener() {
+  const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  const [lastRunProfile, setLastRunProfile] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState(null);
+  const [showThought, setShowThought] = useState(false);
+  const [rawResponse, setRawResponse] = useState("");
+  const [loadStart, setLoadStart] = useState(null);
+  const [terminalFrozenElapsed, setTerminalFrozenElapsed] = useState(null);
+  const [terminalMinimized, setTerminalMinimized] = useState(false);
+  const abortRef = useRef(null);
+
+  const isLoading = status === "loading";
+  const isDirty = useMemo(() => {
+    if (!lastRunProfile) return true;
+    return JSON.stringify(profile) !== JSON.stringify(lastRunProfile);
+  }, [profile, lastRunProfile]);
+
+  const isValid = profile.sectors.length > 0;
+  const canRun = !isLoading && isDirty && isValid;
+
+  // Wire verify callbacks back to report state
+  const handleVerified = useCallback((rank, field, value, correct, sourceUrl) => {
+    setReport(prev => {
+      if (!prev) return prev;
+      const stocks = prev.stocks.map(s => {
+        if (s.rank !== rank) return s;
+        const updated = { ...s };
+        const fieldMap = {
+          "P/E ratio": () => { updated.pe_ratio = { ...updated.pe_ratio, value: parseFloat(value) || value }; },
+          "debt-to-equity": () => { updated.debt_to_equity = { ...updated.debt_to_equity, value: parseFloat(value) || value }; },
+          "ROE": () => { updated.roe = value; },
+          "ROCE": () => { updated.roce = value; },
+          "revenue CAGR": () => { updated.revenue_growth_5y_cagr = value; },
+          "market cap": () => { updated.market_cap = value; },
+          "dividend yield": () => { updated.dividend_yield = { ...updated.dividend_yield, value }; },
+          "promoter holding": () => { updated.promoter_holding = value; },
+          "promoter pledge": () => { updated.promoter_pledge = value; },
+          "bull case target": () => { updated.bull_case = { ...updated.bull_case, target: value }; },
+          "bear case target": () => { updated.bear_case = { ...updated.bear_case, target: value }; },
+        };
+        if (fieldMap[field]) fieldMap[field]();
+        return updated;
+      });
+      return { ...prev, stocks };
+    });
+  }, []);
+
+  const cancel = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort();
+    setStatus(report ? "done" : "idle");
+    setLoadStart(null);
+    setTerminalFrozenElapsed(null);
+  }, [report]);
+
+  const downloadReport = useCallback(() => {
+    if (!report) return;
+    const exportPayload = {
+      _meta: {
+        exported_at: new Date().toISOString(),
+        screener_version: "v2",
+        profile: {
+          risk_tolerance: profile.riskTolerance,
+          time_horizon: profile.timeHorizon,
+          sectors: profile.sectors,
+        },
+      },
+      ...report,
+    };
+    const json = JSON.stringify(exportPayload, null, 2);
+    // text/plain MIME avoids macOS Gatekeeper quarantine warning;
+    // blob URL (not data URI) is required for downloads inside sandboxed iframes.
+    const blob = new Blob([json], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    const datePart = `${istNow.getUTCFullYear()}-${pad(istNow.getUTCMonth() + 1)}-${pad(istNow.getUTCDate())}`;
+    const timePart = `${pad(istNow.getUTCHours())}-${pad(istNow.getUTCMinutes())}`;
+    const filename = `indian-eq-screener_${datePart}_${timePart}.json`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [report, profile]);
+
+  const run = async () => {
+    if (profile.sectors.length === 0) { setError("Select at least one sector."); return; }
+    if (profile.sectors.length > MAX_SECTORS) { setError(`Max ${MAX_SECTORS} sectors.`); return; }
+    setStatus("loading"); setError(null); setReport(null); setRawResponse(""); setTerminalMinimized(false); setTerminalFrozenElapsed(null);
+    const st = Date.now(); setLoadStart(st);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    const tid = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
+    const isShort = ["2 weeks", "1 month"].includes(profile.timeHorizon);
+    const isMedium = ["3 months", "6 months"].includes(profile.timeHorizon);
+    const horizonInstruction = isShort
+      ? "HEAVILY weight technicals, momentum, and near-term catalysts. Price targets should reflect the short timeframe."
+      : isMedium
+      ? "Balance technicals and fundamentals equally. Focus on medium-term catalysts and earnings visibility."
+      : "Weight fundamentals and moat analysis heavily. Use technicals only for entry timing.";
+
+    const { calYear, currentFY, prevFY, asOf } = getDateContext();
+
+    const prompt = `EXECUTE STOCK SCREENING FUNCTION. Return JSON only. Start with {.
+
+DATE CONTEXT: ${asOf} IST | Cal year: ${calYear} | Current FY: FY${currentFY} (Apr ${currentFY - 1}\u2013Mar ${currentFY}) | Last completed FY: FY${prevFY}
+When searching, use FY${prevFY}/FY${currentFY} for annual data and ${calYear} for calendar-year references.
+
+INPUT:
+- Risk Tolerance: ${profile.riskTolerance}
+- Time Horizon: ${profile.timeHorizon}
+- Sectors: ${profile.sectors.join(", ")}
+
+HORIZON INSTRUCTION: ${horizonInstruction}
+
+SEARCH EXECUTION ORDER:
+1. Run 3-4 broad sector searches: one per requested sector to identify top 3-4 candidates per sector
+2. Run 10-14 targeted per-stock searches: "[COMPANY] NSE screener fundamentals FY${prevFY} FY${currentFY}" and "[COMPANY] NSE technical RSI DMA ${calYear}" for your final 10 picks
+3. Run 1-2 macro searches: "NSE Nifty market outlook ${calYear}" and "India macro FII DII rate cycle ${calYear}"
+
+TARGET: Minimize [VERIFY] tags to near zero. Run a targeted search before marking any field as [VERIFY].
+
+REQUIRED FIELDS TO POPULATE (no [VERIFY] unless truly unavailable after searching):
+- cmp, pe_ratio.value, pe_ratio.sector_avg, revenue_growth_5y_cagr, debt_to_equity.value
+- roe, roce, promoter_holding, promoter_pledge, dividend_yield
+- technical_signals: rsi_14, above_50dma, above_200dma, macd_signal, volume_trend
+- score_breakdown for composite_score computation
+- entry_zone, stop_loss, bull_case.target, bear_case.target
+
+OUTPUT: JSON only. No questions. No refusals. No prose. No markdown.`;
+
+    try {
+      let parsed = null, lastErr = null;
+      for (let att = 1; att <= 2; att++) {
+        if (ctrl.signal.aborted) break;
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: ctrl.signal,
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 16000,
+              system: buildSystemPrompt(),
+              messages: [{ role: "user", content: prompt }],
+              tools: [{ type: "web_search_20250305", name: "web_search" }],
+            }),
+          });
+          if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            throw new Error(e.error?.message || `API ${res.status}`);
+          }
+          const data = await res.json();
+          const txt = data.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+          setRawResponse(txt);
+          parsed = parseJSON(txt);
+          if (parsed?.stocks?.length > 0) break;
+          lastErr = "No stocks in response."; parsed = null;
+        } catch (e) {
+          if (e.name === "AbortError") throw new Error("Timed out after 5 minutes.");
+          lastErr = e.message; parsed = null;
+          if (att < 2) await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+      clearTimeout(tid);
+      if (parsed?.stocks) {
+        if (parsed.stocks[0]?.composite_score != null) {
+          parsed.stocks.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0));
+          parsed.stocks.forEach((s, i) => { s.rank = i + 1; });
+        }
+        parsed.generated_at = new Date().toISOString();
+        setReport(parsed);
+        setLastRunProfile({ ...profile });
+        setTerminalFrozenElapsed(Date.now() - st);
+        setTerminalMinimized(true);
+        setStatus("done");
+      } else throw new Error(lastErr || "Failed to parse response. Try again.");
+    } catch (e) {
+      clearTimeout(tid);
+      setError(e.name === "AbortError" ? "Timed out after 5 minutes." : e.message);
+      setStatus("error");
+    } finally {
+      setLoadStart(null);
+      abortRef.current = null;
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0a0a14", color: "#cdd6f4", fontFamily: "'Sora', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes blink { 50%{opacity:0} }
+        @keyframes glowPulse { 0%,100%{box-shadow:0 0 10px #89b4fa80} 50%{box-shadow:0 0 4px #89b4fa30} }
+        @keyframes terminalAppear { from{opacity:0;transform:translateY(12px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+        * { box-sizing: border-box; }
+        input, select {
+          font-family: 'JetBrains Mono', monospace; font-size: 13px;
+          background: #1a1a2e; border: 1px solid #2a2a3e; color: #cdd6f4;
+          padding: 8px 12px; border-radius: 6px; outline: none;
+          transition: border-color 0.2s ease;
+        }
+        input:focus, select:focus { border-color: #89b4fa; }
+        .sector-tags::-webkit-scrollbar { display: none; }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 3px; }
+        button:focus { outline: none; }
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ padding: "24px 28px 18px", borderBottom: "1px solid #1a1a2e" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 style={{ fontFamily: "'Sora', sans-serif", fontSize: 20, fontWeight: 700, color: "#e6e9f0", margin: 0, letterSpacing: -0.5 }}>
+              Indian Equity Screener
+            </h1>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#6c7086", margin: "3px 0 0", letterSpacing: 1, textTransform: "uppercase" }}>
+              Fundamental · Technical · Live Research
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      {/* CONTROLS */}
+      <div style={{ padding: "16px 28px", borderBottom: "1px solid #1a1a2e" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, alignItems: "end" }}>
+          <div style={{ opacity: isLoading ? 0.3 : 1, transition: "opacity 0.3s ease" }}>
+            <label style={{ fontSize: 10, color: "#a6adc8", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5, display: "block", marginBottom: 4, textTransform: "uppercase" }}>Risk</label>
+            <select disabled={isLoading} value={profile.riskTolerance} onChange={e => setProfile({ ...profile, riskTolerance: e.target.value })} style={{ width: "100%" }}>
+              <option value="Conservative">Conservative</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Aggressive">Aggressive</option>
+            </select>
+          </div>
+          <div style={{ opacity: isLoading ? 0.3 : 1, transition: "opacity 0.3s ease" }}>
+            <label style={{ fontSize: 10, color: "#a6adc8", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5, display: "block", marginBottom: 4, textTransform: "uppercase" }}>Horizon</label>
+            <select disabled={isLoading} value={profile.timeHorizon} onChange={e => setProfile({ ...profile, timeHorizon: e.target.value })} style={{ width: "100%" }}>
+              <option value="2 weeks">2 weeks</option>
+              <option value="1 month">1 month</option>
+              <option value="3 months">3 months</option>
+              <option value="6 months">6 months</option>
+              <option value="1 year">1 year</option>
+              <option value="2-3 years">2–3 years</option>
+              <option value="5+ years">5+ years</option>
+            </select>
+          </div>
+          <div style={{ opacity: isLoading ? 0.3 : 1, transition: "opacity 0.3s ease" }}>
+            <label style={{ fontSize: 10, color: "#a6adc8", fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.5, display: "block", marginBottom: 4, textTransform: "uppercase" }}>Sectors</label>
+            <SectorMultiSelect selected={profile.sectors} onChange={s => setProfile({ ...profile, sectors: s })} />
+          </div>
+          <div style={{ display: "flex", gap: 8, width: "100%" }}>
+            <button onClick={run} disabled={!canRun} style={{
+              fontFamily: "'Sora', sans-serif", fontSize: 13, fontWeight: 600, padding: "9px 20px", borderRadius: 6, border: "none",
+              background: canRun ? "#89b4fa" : "#1a1a2e",
+              color: canRun ? "#0a0a14" : "#45475a",
+              cursor: canRun ? "pointer" : "not-allowed",
+              transition: "all 0.2s ease", whiteSpace: "nowrap",
+              boxShadow: canRun ? "0 0 20px #89b4fa30" : "none",
+              flex: 1,
+            }}>
+              {isLoading ? "Running..." : "Run Screening"}
+            </button>
+            {isLoading && (
+              <button onClick={cancel} style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "9px 14px",
+                borderRadius: 6, border: "1px solid #f38ba840",
+                background: "#f38ba810", color: "#f38ba8",
+                cursor: "pointer", whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* BODY */}
+      <div style={{ padding: "20px 28px 48px" }}>
+        {isLoading && loadStart && (
+          <LoadingTerminal startTime={loadStart} frozen={false} onCancel={cancel} minimized={terminalMinimized} onMinimize={() => setTerminalMinimized(!terminalMinimized)} />
+        )}
+
+        {error && (
+          <div style={{ padding: 14, background: "#f38ba810", border: "1px solid #f38ba830", borderRadius: 8, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "#f38ba8", fontFamily: "'JetBrains Mono', monospace", marginBottom: 6 }}>Error: {error}</div>
+            {rawResponse && (
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ fontSize: 11, color: "#6c7086", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Show raw response</summary>
+                <pre style={{ fontSize: 10, color: "#6c7086", whiteSpace: "pre-wrap", marginTop: 8, maxHeight: 300, overflow: "auto", background: "#0c0c18", padding: 10, borderRadius: 4 }}>{rawResponse}</pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {report && (
+          <>
+            {status === "done" && terminalFrozenElapsed && (
+              <LoadingTerminal startTime={0} frozen={true} frozenElapsed={terminalFrozenElapsed} onCancel={() => setTerminalFrozenElapsed(null)} minimized={terminalMinimized} onMinimize={() => setTerminalMinimized(!terminalMinimized)} />
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 280 }}>
+                {report.market_context && <p style={{ fontSize: 13, color: "#6c7086", lineHeight: 1.65, margin: 0 }}>{report.market_context}</p>}
+                {report.generated_at && <div style={{ fontSize: 10, color: "#2a2a4e", fontFamily: "'JetBrains Mono', monospace", marginTop: 5 }}>Generated {formatLocalTime(report.generated_at)}</div>}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => setShowThought(true)} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "7px 14px", borderRadius: 6, border: "1px solid #2a2a3e", background: "transparent", color: "#89b4fa", cursor: "pointer", whiteSpace: "nowrap", transition: "border-color 0.2s ease" }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = "#89b4fa40")}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = "#2a2a3e")}>
+                  View Thought Process
+                </button>
+                <button
+                  onClick={downloadReport}
+                  title="Download full analysis as JSON"
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "7px 12px", borderRadius: 6, border: "1px solid #2a2a3e", background: "transparent", color: "#a6e3a1", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s ease" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#a6e3a140"; e.currentTarget.style.background = "#a6e3a108"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a3e"; e.currentTarget.style.background = "transparent"; }}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 1v9M5 7l3 3 3-3" stroke="#a6e3a1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 12v1.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V12" stroke="#a6e3a1" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                  Export JSON
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {(report.stocks || []).map((s, i) => (
+                <StockCard key={`${s.ticker}-${i}`} stock={s} index={i} onVerified={handleVerified} />
+              ))}
+            </div>
+
+            <div style={{ marginTop: 20, padding: 12, background: "#f9e2af06", border: "1px solid #f9e2af15", borderRadius: 6, fontSize: 10, color: "#45475a", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.7 }}>
+              DISCLAIMER: AI-generated research for informational purposes only. Not financial advice. Verify all data independently before making investment decisions. Consult a SEBI-registered investment advisor.
+            </div>
+          </>
+        )}
+
+        {status === "idle" && !report && !error && (
+          <div style={{ textAlign: "center", padding: "80px 20px" }}>
+            <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.08, fontFamily: "'JetBrains Mono', monospace" }}>◈</div>
+            <div style={{ maxWidth: 520, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              <p style={{ fontSize: 13, color: "#a6adc8", margin: 0, lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
+                Configure your investment profile<br />and run the screener.
+              </p>
+              <p style={{ fontSize: 11, color: "#6c7086", margin: 0, lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
+                Live research · Fundamental + technical + thesis · Ranked output.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showThought && <ThoughtProcessModal data={report} onClose={() => setShowThought(false)} />}
+
+      {/* FOOTER */}
+      <div style={{
+        textAlign: "center", padding: "20px 28px 28px",
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+        color: "#6c7086", letterSpacing: 0.3,
+        borderTop: "1px solid #0f0f1a", marginTop: 8,
+      }}>
+        Made with ❤️ by Claude Code along with human 😊
+      </div>
+    </div>
+  );
+}

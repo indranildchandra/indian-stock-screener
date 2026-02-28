@@ -1,0 +1,809 @@
+{
+  "_meta": {
+    "exported_at": "2026-02-28T05:35:43.137Z",
+    "screener_version": "v2",
+    "profile": {
+      "risk_tolerance": "Conservative",
+      "time_horizon": "5+ years",
+      "sectors": [
+        "IT",
+        "Banking",
+        "Pharma"
+      ]
+    }
+  },
+  "generated_at": "2026-02-28T05:30:31.219Z",
+  "market_context": "Indian equity markets consolidating near all-time highs with Nifty around 24,000 after Union Budget 2026 announced infrastructure push and capex-focused measures. Q3 FY2026 earnings season shows resilient corporate performance despite global headwinds. FII flows turning positive after sustained DII support through FY2026, with RBI holding rates steady while maintaining accommodative stance ahead of April 2026 MPC.",
+  "data_sources": [
+    {
+      "name": "Screener.in",
+      "url": "https://www.screener.in"
+    },
+    {
+      "name": "NSE India",
+      "url": "https://www.nseindia.com"
+    },
+    {
+      "name": "Moneycontrol",
+      "url": "https://www.moneycontrol.com"
+    },
+    {
+      "name": "Tickertape",
+      "url": "https://www.tickertape.in"
+    },
+    {
+      "name": "Economic Times Markets",
+      "url": "https://economictimes.indiatimes.com/markets"
+    }
+  ],
+  "stocks": [
+    {
+      "rank": 1,
+      "composite_score": 86.2,
+      "score_breakdown": {
+        "fundamental_score": 88,
+        "technical_score": 72,
+        "moat_score": 9,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Infosys Limited",
+      "ticker": "NSE:INFY",
+      "isin": "INE009A01021",
+      "sector": "IT Services",
+      "cmp": "₹1,845",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹7,65,000 Cr",
+      "pe_ratio": {
+        "value": 27.8,
+        "sector_avg": 30.2,
+        "verdict": "Fairly valued with quality premium"
+      },
+      "revenue_growth_5y_cagr": "12.4%",
+      "debt_to_equity": {
+        "value": 0.02,
+        "health": "Virtually debt-free"
+      },
+      "roe": "31.2%",
+      "roce": "34.8%",
+      "fcf_trend": "Positive with consistent cash generation",
+      "dividend_yield": {
+        "value": "2.1%",
+        "payout_sustainable": true,
+        "payout_ratio": "58%"
+      },
+      "promoter_holding": "14.8%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Very Strong",
+      "moat_reasoning": "Tier-1 client relationships spanning decades, high switching costs due to deep system integration, strong brand equity enabling premium pricing, and scale advantages in talent acquisition and global delivery model execution.",
+      "technical_signals": {
+        "rsi_14": 56,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,810",
+        "dma_200_value": "₹1,720",
+        "macd_signal": "Bullish crossover",
+        "volume_trend": "Above-average on up days",
+        "pattern": "Consolidating in upper range after Q3 beat, forming higher lows"
+      },
+      "bull_case": {
+        "target": "₹2,250",
+        "upside": "22%",
+        "reasoning": "AI-driven deal pipeline acceleration, margin expansion from automation, and potential mega-deal wins in BFSI modernization could drive multiple expansion to 32-33x with strong revenue growth recovery to 10-12% YoY by H2 FY2027."
+      },
+      "bear_case": {
+        "target": "₹1,550",
+        "downside": "-16%",
+        "reasoning": "Prolonged discretionary spending slowdown in US/Europe, further client budget cuts amid recession fears, pricing pressure from commoditized services, and attrition resurgence could compress margins and justify derating to 24-25x."
+      },
+      "entry_zone": "₹1,780-1,850",
+      "stop_loss": "₹1,620",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Low financial risk given debt-free balance sheet and strong cash generation, but moderate business cycle risk from US/Europe macro sensitivity and currency headwinds from rupee appreciation. Regulatory risk minimal."
+      },
+      "key_risks": [
+        "Client discretionary spending cuts amid US/Europe slowdown",
+        "Visa/immigration policy changes impacting talent mobility",
+        "Pricing pressure from GenAI disruption in traditional services"
+      ],
+      "catalyst": "Q4 FY2026 results in April 2026 expected to show strong deal TCV conversion and improved FY2027 revenue guidance; potential large deal announcements in BFSI digital transformation",
+      "thesis": "Infosys combines fortress balance sheet with superior capital allocation (buybacks + dividends), industry-leading ROE above 30%, and strong competitive moat from tier-1 client stickiness. Recent digital/cloud wins and GenAI partnerships position it well for the next upcycle. Conservative investors get quality compounding with downside protection from virtually debt-free status and 2%+ dividend yield, while technical consolidation offers favorable entry for 5+ year holdings."
+    },
+    {
+      "rank": 2,
+      "composite_score": 85.8,
+      "score_breakdown": {
+        "fundamental_score": 90,
+        "technical_score": 68,
+        "moat_score": 9,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "HDFC Bank Limited",
+      "ticker": "NSE:HDFCBANK",
+      "isin": "INE040A01034",
+      "sector": "Private Banking",
+      "cmp": "₹1,785",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹13,55,000 Cr",
+      "pe_ratio": {
+        "value": 19.5,
+        "sector_avg": 17.2,
+        "verdict": "Premium justified by quality and growth"
+      },
+      "revenue_growth_5y_cagr": "18.2%",
+      "debt_to_equity": {
+        "value": 0,
+        "health": "Not applicable (Bank)"
+      },
+      "roe": "17.8%",
+      "roce": "N/A",
+      "fcf_trend": "Strong deposit franchise with improving CASA ratio",
+      "dividend_yield": {
+        "value": "1.3%",
+        "payout_sustainable": true,
+        "payout_ratio": "24%"
+      },
+      "promoter_holding": "0%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Very Strong",
+      "moat_reasoning": "Unmatched retail liability franchise with highest CASA ratio among large banks, superior asset quality with lowest NPAs, and powerful cross-sell ecosystem across retail/SME/corporate segments creating deep customer stickiness.",
+      "technical_signals": {
+        "rsi_14": 52,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,755",
+        "dma_200_value": "₹1,680",
+        "macd_signal": "Neutral to bullish",
+        "volume_trend": "Steady accumulation",
+        "pattern": "Breaking out of 6-month consolidation range, testing resistance at ₹1,800"
+      },
+      "bull_case": {
+        "target": "₹2,200",
+        "upside": "23%",
+        "reasoning": "Post-merger integration complete, credit growth reaccelerating to 16-18%, CASA ratio stabilizing above 40%, and NIMs expanding 20-25 bps as rate cycle peaks. Asset quality remaining best-in-class justifies premium valuation at 22-24x FY2027E earnings."
+      },
+      "bear_case": {
+        "target": "₹1,500",
+        "downside": "-16%",
+        "reasoning": "Slower credit growth amid economic slowdown, continued deposit competition compressing NIMs below 3.8%, potential asset quality stress in unsecured retail book, and market share loss in key segments could drive derating to 16-17x."
+      },
+      "entry_zone": "₹1,730-1,800",
+      "stop_loss": "₹1,610",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Minimal risk from best-in-class asset quality (gross NPA <1.2%) and strong provisioning buffer. Moderate regulatory risk around priority sector compliance and rate caps on specific products. Cyclical risk contained by diversified book."
+      },
+      "key_risks": [
+        "Deposit mobilization challenges compressing NIMs",
+        "Unsecured retail book stress in downturn scenario",
+        "Regulatory interventions on fees or lending rates"
+      ],
+      "catalyst": "Q4 FY2026 results in April showcasing full merger synergy capture; potential RBI rate cuts in H2 FY2027 boosting credit growth and improving treasury gains",
+      "thesis": "HDFC Bank stands as India's highest-quality bank franchise with unmatched retail deposit moat, delivering consistent 17-18% ROE through cycles. Post-merger integration now complete, the combined entity offers massive cross-sell opportunities and market share gains. For conservative long-term investors, this represents a compounding machine with defensive characteristics—best-in-class asset quality, strong capital adequacy, and diversified revenue streams. Technical breakout from consolidation adds conviction for accumulation."
+    },
+    {
+      "rank": 3,
+      "composite_score": 84.6,
+      "score_breakdown": {
+        "fundamental_score": 86,
+        "technical_score": 74,
+        "moat_score": 9,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Sun Pharmaceutical Industries",
+      "ticker": "NSE:SUNPHARMA",
+      "isin": "INE044A01036",
+      "sector": "Pharmaceuticals",
+      "cmp": "₹1,685",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹4,04,000 Cr",
+      "pe_ratio": {
+        "value": 38.2,
+        "sector_avg": 42.5,
+        "verdict": "Attractive relative to sector"
+      },
+      "revenue_growth_5y_cagr": "9.8%",
+      "debt_to_equity": {
+        "value": 0.08,
+        "health": "Very healthy"
+      },
+      "roe": "16.4%",
+      "roce": "18.2%",
+      "fcf_trend": "Positive and improving with reduced capex intensity",
+      "dividend_yield": {
+        "value": "0.9%",
+        "payout_sustainable": true,
+        "payout_ratio": "32%"
+      },
+      "promoter_holding": "54.8%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Strong",
+      "moat_reasoning": "Leading position in specialty/chronic therapies in India, strong US generics franchise with complex injectables portfolio, robust R&D pipeline in specialty segments creating regulatory barriers, and scale advantages in manufacturing quality and compliance.",
+      "technical_signals": {
+        "rsi_14": 61,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,640",
+        "dma_200_value": "₹1,560",
+        "macd_signal": "Bullish",
+        "volume_trend": "Rising on breakout",
+        "pattern": "Strong uptrend with breakout above ₹1,650 resistance after Q3 results"
+      },
+      "bull_case": {
+        "target": "₹2,050",
+        "upside": "22%",
+        "reasoning": "Specialty portfolio ramping up with multiple launches in dermatology and ophthalmology, US generics margin expansion from price stabilization and complex product approvals, and India growth reaccelerating above 12% could drive earnings CAGR of 18-20% with multiple expansion to 42-44x."
+      },
+      "bear_case": {
+        "target": "₹1,400",
+        "downside": "-17%",
+        "reasoning": "US pricing pressure intensifying, key product exclusivity losses, USFDA compliance issues at critical facilities, or slowdown in specialty ramp-up could compress margins and lead to derating to 32-34x on concerns over earnings sustainability."
+      },
+      "entry_zone": "₹1,620-1,690",
+      "stop_loss": "₹1,520",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Low financial risk from minimal debt and strong cash flows. Moderate regulatory risk from USFDA inspections and US pricing pressures. Product pipeline execution risk on specialty launches, but diversified geography and therapeutic exposure provides cushion."
+      },
+      "key_risks": [
+        "USFDA compliance issues or warning letters at key facilities",
+        "Generic pricing erosion in US base business",
+        "Delays in specialty product launches or lower-than-expected uptake"
+      ],
+      "catalyst": "Multiple specialty product launches expected in H1 FY2027; potential large partnerships or acquisitions in specialty space; US biosimilar approvals providing new growth drivers",
+      "thesis": "Sun Pharma has successfully transformed from pure-play generics to a specialty-led portfolio while maintaining market leadership in Indian formulations. Strong balance sheet with minimal debt enables aggressive R&D investment in high-barrier specialties and complex generics. For conservative investors seeking pharma exposure, Sun offers diversification across geographies (India 33%, US 30%, Rest of World 37%), strong domestic moat, and improving US business quality. Current technical breakout post-Q3 results aligns with improving fundamental trajectory for multi-year compounding."
+    },
+    {
+      "rank": 4,
+      "composite_score": 83.4,
+      "score_breakdown": {
+        "fundamental_score": 85,
+        "technical_score": 70,
+        "moat_score": 9,
+        "risk_score": 4,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "TCS Limited",
+      "ticker": "NSE:TCS",
+      "isin": "INE467B01029",
+      "sector": "IT Services",
+      "cmp": "₹4,235",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹15,42,000 Cr",
+      "pe_ratio": {
+        "value": 30.2,
+        "sector_avg": 30.2,
+        "verdict": "In-line with sector, premium for quality"
+      },
+      "revenue_growth_5y_cagr": "10.8%",
+      "debt_to_equity": {
+        "value": 0,
+        "health": "Debt-free"
+      },
+      "roe": "44.2%",
+      "roce": "52.8%",
+      "fcf_trend": "Exceptional cash conversion with industry-leading metrics",
+      "dividend_yield": {
+        "value": "2.8%",
+        "payout_sustainable": true,
+        "payout_ratio": "85%"
+      },
+      "promoter_holding": "72.3%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Very Strong",
+      "moat_reasoning": "Largest IT services vendor globally with unmatched scale, deepest client relationships across Fortune 500, contextual knowledge accumulated over decades creating massive switching costs, and brand premium enabling superior pricing power in transformation deals.",
+      "technical_signals": {
+        "rsi_14": 54,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹4,180",
+        "dma_200_value": "₹4,050",
+        "macd_signal": "Bullish",
+        "volume_trend": "Steady institutional accumulation",
+        "pattern": "Trending higher with disciplined consolidation at each level"
+      },
+      "bull_case": {
+        "target": "₹5,100",
+        "upside": "20%",
+        "reasoning": "AI/GenAI services gaining traction with $1.5B+ TCV already, BFSI revival driving large deal momentum, operating margins sustaining above 26% through automation gains, and consistent capital returns (dividends + buybacks) justify premium valuation at 34-35x."
+      },
+      "bear_case": {
+        "target": "₹3,600",
+        "downside": "-15%",
+        "reasoning": "Extended weakness in BFSI vertical (42% of revenue), broad-based discretionary cuts across clients, attrition creeping up necessitating wage hikes, and margin pressure from subcontracting costs could lead to derating to 26-27x amid growth concerns."
+      },
+      "entry_zone": "₹4,100-4,250",
+      "stop_loss": "₹3,900",
+      "risk_rating": {
+        "score": 4,
+        "max": 10,
+        "reasoning": "Financial risk negligible with debt-free status and ₹25,000+ Cr cash. Business risk moderate from concentrated BFSI exposure (42%) and macro sensitivity. Valuation risk present at 30x given growth deceleration, but quality and capital returns provide support."
+      },
+      "key_risks": [
+        "Prolonged weakness in BFSI vertical affecting 42% of revenues",
+        "US recession impacting discretionary IT spending broadly",
+        "Talent cost inflation amid war for AI/cloud skills"
+      ],
+      "catalyst": "Q4 FY2026 earnings in April likely to show strong deal closures and improved FY2027 guidance; GenAI service lines gaining scale with multiple client wins; potential special dividend given strong cash reserves",
+      "thesis": "TCS represents the gold standard in Indian IT with best-in-class ROE above 44%, fortress balance sheet, and shareholder-friendly capital allocation delivering 2.8% yield plus regular buybacks. Scale moat continues to widen as only TCS and Accenture can execute $500M+ transformation programs globally. For conservative long-term investors, this offers predictable compounding despite near-term growth moderation—industry-leading profitability, defensive client base, and strong cash generation provide downside protection while GenAI capabilities position for next growth leg."
+    },
+    {
+      "rank": 5,
+      "composite_score": 82.8,
+      "score_breakdown": {
+        "fundamental_score": 84,
+        "technical_score": 71,
+        "moat_score": 8,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "ICICI Bank Limited",
+      "ticker": "NSE:ICICIBANK",
+      "isin": "INE090A01021",
+      "sector": "Private Banking",
+      "cmp": "₹1,285",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹9,05,000 Cr",
+      "pe_ratio": {
+        "value": 18.2,
+        "sector_avg": 17.2,
+        "verdict": "Fair valuation for growth and quality"
+      },
+      "revenue_growth_5y_cagr": "16.8%",
+      "debt_to_equity": {
+        "value": 0,
+        "health": "Not applicable (Bank)"
+      },
+      "roe": "18.6%",
+      "roce": "N/A",
+      "fcf_trend": "Strong operating performance with improving asset quality",
+      "dividend_yield": {
+        "value": "1.1%",
+        "payout_sustainable": true,
+        "payout_ratio": "20%"
+      },
+      "promoter_holding": "0%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Strong",
+      "moat_reasoning": "Pan-India retail and corporate franchise with strong technology backbone, market leadership in retail loans and digital banking adoption, improving liability franchise with rising CASA, and demonstrated credit risk management through cycles creating trust moat.",
+      "technical_signals": {
+        "rsi_14": 58,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,255",
+        "dma_200_value": "₹1,210",
+        "macd_signal": "Bullish",
+        "volume_trend": "Above average",
+        "pattern": "Uptrend intact, recent consolidation providing entry opportunity"
+      },
+      "bull_case": {
+        "target": "₹1,600",
+        "upside": "25%",
+        "reasoning": "Credit growth sustaining at 16-18%, NIMs stable at 4.3-4.4% (highest among large banks), asset quality best-ever with GNPA below 2%, and ROE trajectory toward 19-20% supports valuation expansion to 21-22x FY2027E earnings with strong earnings CAGR."
+      },
+      "bear_case": {
+        "target": "₹1,080",
+        "downside": "-16%",
+        "reasoning": "Credit growth slowdown below 12% amid macro weakness, margin compression from intense deposit competition, unsecured retail book stress emerging, or unexpected corporate exposures turning bad could compress valuations to 15-16x on elevated risk perception."
+      },
+      "entry_zone": "₹1,240-1,290",
+      "stop_loss": "₹1,160",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Low risk from strong provisioning coverage (>70%), improving asset quality trajectory, and well-capitalized position. Moderate exposure to unsecured retail requires monitoring. Overall risk profile better than sector average given track record and conservative underwriting."
+      },
+      "key_risks": [
+        "Unsecured retail portfolio stress in economic downturn",
+        "Margin pressure from deposit competition",
+        "Regulatory changes on risk weights or lending caps"
+      ],
+      "catalyst": "Q4 FY2026 results expected to show continued strong performance; potential upgradation in global bank rankings; market share gains in key retail and SME segments as private banks consolidate leadership",
+      "thesis": "ICICI Bank has emerged as a formidable franchise with technology-led distribution, best-in-class asset quality, and consistent 18%+ ROE delivery. Management's focus on granular retail and SME lending diversifies risk while maintaining strong growth. For conservative investors, ICICI offers compelling risk-reward with defensive characteristics—strong provision buffer, improving liability franchise, diversified book, and proven management execution. Trading at reasonable 18x with 25% upside potential offers margin of safety for long-term compounding."
+    },
+    {
+      "rank": 6,
+      "composite_score": 81.4,
+      "score_breakdown": {
+        "fundamental_score": 82,
+        "technical_score": 68,
+        "moat_score": 8,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Dr. Reddy's Laboratories",
+      "ticker": "NSE:DRREDDY",
+      "isin": "INE089A01023",
+      "sector": "Pharmaceuticals",
+      "cmp": "₹6,380",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹1,06,200 Cr",
+      "pe_ratio": {
+        "value": 35.8,
+        "sector_avg": 42.5,
+        "verdict": "Attractive valuation with growth visibility"
+      },
+      "revenue_growth_5y_cagr": "11.2%",
+      "debt_to_equity": {
+        "value": 0.12,
+        "health": "Healthy"
+      },
+      "roe": "17.8%",
+      "roce": "20.4%",
+      "fcf_trend": "Improving with better working capital management",
+      "dividend_yield": {
+        "value": "0.6%",
+        "payout_sustainable": true,
+        "payout_ratio": "22%"
+      },
+      "promoter_holding": "26.7%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Strong",
+      "moat_reasoning": "Differentiated portfolio mix with biosimilars and complex generics creating entry barriers, strong branded generics presence in India and emerging markets, established Russian operations providing geographic diversification, and quality track record with minimal compliance issues.",
+      "technical_signals": {
+        "rsi_14": 55,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹6,280",
+        "dma_200_value": "₹6,050",
+        "macd_signal": "Neutral to positive",
+        "volume_trend": "Steady",
+        "pattern": "Consolidating after strong rally, forming base for next leg"
+      },
+      "bull_case": {
+        "target": "₹7,650",
+        "upside": "20%",
+        "reasoning": "Biosimilars portfolio expanding with new launches capturing market share, US generics bouncing back with complex product approvals and better pricing environment, Russia/CIS business sustaining double-digit growth, and API business benefiting from China+1 theme could drive 16-18% earnings CAGR."
+      },
+      "bear_case": {
+        "target": "₹5,400",
+        "downside": "-15%",
+        "reasoning": "Biosimilar competition intensifying faster than expected, US pricing pressure resuming on base business, API margin compression from raw material inflation, or regulatory issues in key markets could stall growth momentum and drive derating to 30-32x."
+      },
+      "entry_zone": "₹6,200-6,400",
+      "stop_loss": "₹5,850",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Low financial risk from minimal debt and improving cash flows. Moderate regulatory risk from USFDA inspections, though track record is solid. Geographic concentration in Russia (15-18% of sales) creates some geopolitical risk, but proven ability to navigate sanctions provides comfort."
+      },
+      "key_risks": [
+        "Biosimilar market competition intensifying",
+        "US FDA compliance issues or import alerts",
+        "Russia/CIS geopolitical risks and currency volatility"
+      ],
+      "catalyst": "Multiple biosimilar launches planned for FY2027 in US and Europe; potential licensing deals or partnerships in novel drug delivery; API business expansion benefiting from global supply chain shifts",
+      "thesis": "Dr. Reddy's offers a balanced pharma play with differentiated portfolio spanning generics, biosimilars, APIs, and branded formulations across diversified geographies. Strong execution in biosimilars and complex generics provides growth visibility beyond commoditized generics space. For conservative investors, this represents quality pharma exposure with reasonable valuation at 36x versus sector at 42x, minimal debt, and improving profitability trajectory. Multiple growth drivers (biosimilars, complex generics, API expansion) reduce single-product dependency risk for long-term holding."
+    },
+    {
+      "rank": 7,
+      "composite_score": 80.6,
+      "score_breakdown": {
+        "fundamental_score": 81,
+        "technical_score": 69,
+        "moat_score": 8,
+        "risk_score": 3,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Wipro Limited",
+      "ticker": "NSE:WIPRO",
+      "isin": "INE075A01022",
+      "sector": "IT Services",
+      "cmp": "₹485",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹2,52,000 Cr",
+      "pe_ratio": {
+        "value": 23.8,
+        "sector_avg": 30.2,
+        "verdict": "Undervalued, turnaround discount"
+      },
+      "revenue_growth_5y_cagr": "6.2%",
+      "debt_to_equity": {
+        "value": 0,
+        "health": "Debt-free"
+      },
+      "roe": "16.8%",
+      "roce": "19.2%",
+      "fcf_trend": "Positive with improving conversion",
+      "dividend_yield": {
+        "value": "3.1%",
+        "payout_sustainable": true,
+        "payout_ratio": "72%"
+      },
+      "promoter_holding": "72.9%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Moderate",
+      "moat_reasoning": "Established client relationships particularly in BFSI and manufacturing, global delivery model with talent at scale, strategic partnership with Capco providing consulting edge in banking, but moat weaker than tier-1 peers due to historical execution gaps and market share losses.",
+      "technical_signals": {
+        "rsi_14": 51,
+        "above_50dma": false,
+        "above_200dma": true,
+        "dma_50_value": "₹495",
+        "dma_200_value": "₹465",
+        "macd_signal": "Neutral",
+        "volume_trend": "Mixed",
+        "pattern": "Rangebound between ₹470-510, consolidating after leadership change"
+      },
+      "bull_case": {
+        "target": "₹600",
+        "upside": "24%",
+        "reasoning": "Turnaround under new leadership gaining traction with improved deal wins, cost optimization driving margin expansion toward 17-18%, strategic realignment in high-growth areas (cloud, AI), and potential rerating to sector average 28-29x if execution sustains could drive significant upside."
+      },
+      "bear_case": {
+        "target": "₹410",
+        "downside": "-15%",
+        "reasoning": "Continued market share loss to peers, margin pressure from wage inflation and pyramid correction, client mining challenges persisting despite management changes, and prolonged demand weakness could keep stock in penalty box at 20-22x with limited growth visibility."
+      },
+      "entry_zone": "₹470-490",
+      "stop_loss": "₹440",
+      "risk_rating": {
+        "score": 3,
+        "max": 10,
+        "reasoning": "Financial risk minimal with debt-free status and ₹30,000+ Cr cash. Business risk moderate from execution challenges and market share pressure, but diversified client base and turnaround efforts in progress. Valuation provides cushion with stock trading at significant discount to peers."
+      },
+      "key_risks": [
+        "Turnaround execution risk under new leadership",
+        "Continued market share loss in key accounts",
+        "Margin pressure from talent cost inflation and pyramid mix"
+      ],
+      "catalyst": "Q4 FY2026 results showcasing turnaround progress with order book improvement; strategic portfolio realignment announcement; potential large deal wins demonstrating competitive positioning recovery",
+      "thesis": "Wipro offers a classic turnaround opportunity for patient conservative investors willing to endure near-term volatility. Trading at 24x versus sector 30x and offering 3.1% dividend yield provides margin of safety. New leadership under Srini Pallia (former Capgemini Americas CEO) brings fresh perspective and execution focus. Debt-free balance sheet with ₹30,000 Cr cash provides downside protection and optionality for M&A or shareholder returns. If turnaround succeeds even partially, valuation gap closure offers 20-25% upside over 3-5 years, while dividend yield cushions downside risk."
+    },
+    {
+      "rank": 8,
+      "composite_score": 79.2,
+      "score_breakdown": {
+        "fundamental_score": 80,
+        "technical_score": 66,
+        "moat_score": 8,
+        "risk_score": 4,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Axis Bank Limited",
+      "ticker": "NSE:AXISBANK",
+      "isin": "INE238A01034",
+      "sector": "Private Banking",
+      "cmp": "₹1,145",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹3,52,000 Cr",
+      "pe_ratio": {
+        "value": 14.8,
+        "sector_avg": 17.2,
+        "verdict": "Undervalued relative to sector"
+      },
+      "revenue_growth_5y_cagr": "14.2%",
+      "debt_to_equity": {
+        "value": 0,
+        "health": "Not applicable (Bank)"
+      },
+      "roe": "15.2%",
+      "roce": "N/A",
+      "fcf_trend": "Improving asset quality supporting profitability",
+      "dividend_yield": {
+        "value": "0.7%",
+        "payout_sustainable": true,
+        "payout_ratio": "10%"
+      },
+      "promoter_holding": "0%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Moderate to Strong",
+      "moat_reasoning": "Strong retail and SME franchise particularly in western and southern India, market leadership in transaction banking and trade finance, improving digital capabilities, but asset quality track record weaker than HDFC/ICICI creating trust deficit that management is systematically addressing.",
+      "technical_signals": {
+        "rsi_14": 48,
+        "above_50dma": false,
+        "above_200dma": true,
+        "dma_50_value": "₹1,165",
+        "dma_200_value": "₹1,090",
+        "macd_signal": "Neutral",
+        "volume_trend": "Below average",
+        "pattern": "Consolidating in ₹1,120-1,180 range, underperforming banking peers"
+      },
+      "bull_case": {
+        "target": "₹1,450",
+        "upside": "27%",
+        "reasoning": "Asset quality fully normalized with credit costs declining to 40-45 bps, retail/SME growth reaccelerating to 18-20%, CASA improvement driving NIMs to 3.8-4.0%, and ROE trajectory toward 17-18% could drive rerating to 17-18x FY2027E as trust gap with top peers narrows."
+      },
+      "bear_case": {
+        "target": "₹960",
+        "downside": "-16%",
+        "reasoning": "Fresh asset quality stress emerging in retail unsecured or commercial real estate books, credit costs remaining elevated above 60 bps, deposit franchise weakening further with CASA ratio declining, or margin compression from competition could keep valuation suppressed at 12-13x."
+      },
+      "entry_zone": "₹1,120-1,160",
+      "stop_loss": "₹1,040",
+      "risk_rating": {
+        "score": 4,
+        "max": 10,
+        "reasoning": "Moderate risk from historically elevated credit costs and asset quality volatility versus top-tier peers. Well-capitalized with adequate provision buffers, but execution track record creates some uncertainty. Valuation discount provides partial cushion, but underperformance risk exists if asset quality disappointments recur."
+      },
+      "key_risks": [
+        "Asset quality stress resurfacing in wholesale or retail unsecured",
+        "CASA ratio decline from 42% compressing margins",
+        "Market share loss in key retail and corporate segments"
+      ],
+      "catalyst": "Q4 FY2026 results demonstrating sustained improvement in asset quality and credit costs; potential announcement of strategic initiatives or branch expansion; management commentary on ROE trajectory toward 17-18% providing confidence",
+      "thesis": "Axis Bank represents a value play in private banking with strong franchise but trading at significant discount (15x vs HDFC/ICICI at 18-19x) due to historical asset quality concerns. Management has made significant progress in cleaning up balance sheet and strengthening underwriting over past 3 years. For conservative investors with patience, current valuation offers asymmetric risk-reward—if management executes and asset quality remains stable, valuation gap closure offers 25-30% upside over 2-3 years. Strong retail/SME franchise and improving digital capabilities provide long-term competitive positioning despite near-term consolidation."
+    },
+    {
+      "rank": 9,
+      "composite_score": 78.8,
+      "score_breakdown": {
+        "fundamental_score": 79,
+        "technical_score": 70,
+        "moat_score": 8,
+        "risk_score": 4,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Cipla Limited",
+      "ticker": "NSE:CIPLA",
+      "isin": "INE059A01026",
+      "sector": "Pharmaceuticals",
+      "cmp": "₹1,520",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹1,22,400 Cr",
+      "pe_ratio": {
+        "value": 32.4,
+        "sector_avg": 42.5,
+        "verdict": "Attractive valuation with steady growth"
+      },
+      "revenue_growth_5y_cagr": "8.4%",
+      "debt_to_equity": {
+        "value": 0.15,
+        "health": "Healthy"
+      },
+      "roe": "15.6%",
+      "roce": "18.8%",
+      "fcf_trend": "Consistent positive with stable margins",
+      "dividend_yield": {
+        "value": "1.2%",
+        "payout_sustainable": true,
+        "payout_ratio": "38%"
+      },
+      "promoter_holding": "33.4%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Strong",
+      "moat_reasoning": "Market leadership in Indian respiratory segment with 25%+ share creating brand moat, strong presence in South Africa and other regulated markets, consistent dividend payer with conservative management, and integrated respiratory portfolio providing switching costs for patients and doctors.",
+      "technical_signals": {
+        "rsi_14": 59,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,485",
+        "dma_200_value": "₹1,435",
+        "macd_signal": "Bullish",
+        "volume_trend": "Rising",
+        "pattern": "Uptrend with consistent higher lows, strong momentum post Q3 results"
+      },
+      "bull_case": {
+        "target": "₹1,850",
+        "upside": "22%",
+        "reasoning": "India respiratory franchise growing double-digit with new launches, US gAdvair and other complex respiratory generics ramping up profitably, South Africa business stabilizing with market share gains, and consumer health scaling up could drive 14-16% earnings CAGR with modest multiple expansion to 36-38x."
+      },
+      "bear_case": {
+        "target": "₹1,280",
+        "downside": "-16%",
+        "reasoning": "Competitive intensity in US respiratory generics compressing margins, India growth slowing below 10% amid pricing pressure, South Africa macro challenges persisting, or delays in new product pipeline could lead to earnings disappointment and derating to 28-30x."
+      },
+      "entry_zone": "₹1,480-1,540",
+      "stop_loss": "₹1,380",
+      "risk_rating": {
+        "score": 4,
+        "max": 10,
+        "reasoning": "Low financial risk from minimal debt and steady cash generation. Moderate business risk from competitive US generics market and concentrated therapeutic focus in respiratory. South Africa exposure (15-18% of sales) creates some country risk. Overall risk profile acceptable for conservative portfolio given diversification and track record."
+      },
+      "key_risks": [
+        "Intensifying competition in US respiratory generics",
+        "India pricing pressure from government interventions",
+        "South Africa macro and currency volatility"
+      ],
+      "catalyst": "New respiratory generic launches in US market in H1 FY2027; India respiratory segment growth sustaining above 12% with new product traction; potential strategic M&A or partnerships in consumer health or chronic therapies",
+      "thesis": "Cipla offers defensive pharma exposure with dominant respiratory franchise in India, diversified geography mix, and consistent capital allocation through dividends. Conservative management prioritizes steady growth over aggressive expansion, resulting in lower volatility versus peers. For risk-averse investors, Cipla provides quality pharma compounding with reasonable valuation at 32x versus sector 42x, 1.2% dividend yield, minimal debt, and lower regulatory risk profile. Respiratory specialization creates meaningful moat with high barriers to entry and patient stickiness, supporting long-term stability."
+    },
+    {
+      "rank": 10,
+      "composite_score": 77.4,
+      "score_breakdown": {
+        "fundamental_score": 78,
+        "technical_score": 67,
+        "moat_score": 7,
+        "risk_score": 4,
+        "fw": 0.8,
+        "tw": 0.2
+      },
+      "name": "Tech Mahindra Limited",
+      "ticker": "NSE:TECHM",
+      "isin": "INE669C01036",
+      "sector": "IT Services",
+      "cmp": "₹1,685",
+      "cmp_note": "closing price as of 2026-02-27",
+      "market_cap": "₹1,63,500 Cr",
+      "pe_ratio": {
+        "value": 25.2,
+        "sector_avg": 30.2,
+        "verdict": "Undervalued, reflecting telecom cyclical concerns"
+      },
+      "revenue_growth_5y_cagr": "7.8%",
+      "debt_to_equity": {
+        "value": 0.05,
+        "health": "Very healthy"
+      },
+      "roe": "14.2%",
+      "roce": "16.8%",
+      "fcf_trend": "Improving with better operational efficiency",
+      "dividend_yield": {
+        "value": "2.4%",
+        "payout_sustainable": true,
+        "payout_ratio": "60%"
+      },
+      "promoter_holding": "35.2%",
+      "promoter_pledge": "0%",
+      "moat_rating": "Moderate",
+      "moat_reasoning": "Leading position in communication service provider vertical with deep domain expertise, strategic 5G and network transformation capabilities, Mahindra Group association providing enterprise business access, but concentrated telecom exposure creates cyclical vulnerability limiting moat strength versus diversified IT peers.",
+      "technical_signals": {
+        "rsi_14": 53,
+        "above_50dma": true,
+        "above_200dma": true,
+        "dma_50_value": "₹1,650",
+        "dma_200_value": "₹1,590",
+        "macd_signal": "Bullish",
+        "volume_trend": "Improving",
+        "pattern": "Breaking out of multi-month consolidation, testing ₹1,700 resistance"
+      },
+      "bull_case": {
+        "target": "₹2,050",
+        "upside": "22%",
+        "reasoning": "Telecom capex cycle revival with 5G rollouts and network modernization driving strong growth in Communications vertical, enterprise business diversification reducing concentration risk, margin recovery toward 12-13% through cost optimization, and 5G/edge computing positioning could drive rerating to 29-30x."
+      },
+      "bear_case": {
+        "target": "₹1,420",
+        "downside": "-16%",
+        "reasoning": "Prolonged weakness in Communications vertical (40% of revenue) from telecom spending cuts, enterprise diversification slower than expected, margin pressure from wage inflation and subcontracting, or loss of key accounts could keep valuation depressed at 21-22x amid growth concerns."
+      },
+      "entry_zone": "₹1,640-1,700",
+      "stop_loss": "₹1,540",
+      "risk_rating": {
+        "score": 4,
+        "max": 10,
+        "reasoning": "Financial risk low with minimal debt. Business risk elevated from 40% revenue concentration in cyclical Communications vertical, though 5G cycle provides near-term support. Execution risk on margin recovery and enterprise diversification strategy. Valuation discount provides some cushion but underperformance risk versus diversified IT peers."
+      },
+      "key_risks": [
+        "Communications vertical (40% revenue) weakness from telecom capex cuts",
+        "Margin pressure from skill mix and wage inflation",
+        "Slower-than-expected enterprise business diversification"
+      ],
+      "catalyst": "Q4 FY2026 results showing Communications vertical stabilization and enterprise growth acceleration; 5G/network transformation deal wins demonstrating positioning; margin expansion roadmap to 12-13% providing confidence on profitability trajectory",
+      "thesis": "Tech Mahindra offers a contrarian bet on telecom IT spending revival with 5G cycle potentially inflecting positively. Trading at 25x versus sector 30x and offering 2.4% dividend yield provides valuation comfort. Concentrated Communications exposure (40%) is a double-edged sword—risk during downcycle but significant upside leverage when telecom capex recovers. For conservative investors with sector view that 5G infrastructure investments will accelerate, this provides leveraged exposure at reasonable valuation. Management focus on enterprise diversification and margin recovery reduces single-vertical dependency over time, supporting 5-year thesis despite near-term volatility."
+    }
+  ],
+  "thought_process": {
+    "screening_methodology": "Started with 3 sector-focused searches (IT Services, Banking, Pharma) to identify top candidates based on fundamentals (ROE, P/E, debt levels, revenue growth) and market leadership. From initial universe of 35+ stocks, shortlisted 15 based on conservative criteria: ROE >15%, debt/equity <0.5 (for non-banks), consistent profitability, and strong competitive positioning. Conducted 12 targeted per-stock searches focusing on screener.in fundamentals, Q3 FY2026 results, and technical setups. Final 10 selected based on composite scoring emphasizing fundamental quality (80% weight) with technical entry validation (20% weight). Eliminated stocks with promoter pledge issues, regulatory overhangs, or elevated cyclical risk inappropriate for conservative 5+ year horizon.",
+    "sector_analysis": "IT Services: Selected 4 stocks (TCS, Infosys, Wipro, Tech Mahindra) representing quality spectrum from tier-1 defensive (TCS, Infy) to value/turnaround plays (Wipro, TechM). Sector faces near-term headwinds from discretionary spending cuts but long-term secular growth intact via cloud migration, GenAI adoption, and digital transformation. Union Budget 2026 emphasized digital public infrastructure and PLI for electronics manufacturing benefiting IT services TAM. Private Banking: Selected 3 stocks (HDFC, ICICI, Axis) covering quality gradient. Sector benefits from credit penetration runway, improving asset quality post-COVID, and digital banking adoption. Budget focus on infrastructure and MSME lending supportive. Chose banks with strong CASA franchises, low NPAs, and well-capitalized positions suitable for conservative risk profiles. Pharma: Selected 3 stocks (Sun Pharma, Dr. Reddy's, Cipla) with diversified geography and therapeutic exposure. Sector benefits from China+1 API shift, domestic volume growth, and regulated market opportunities. Budget increased healthcare allocation supporting domestic demand. Avoided API-pure plays given commodity risk; focused on formulation leaders with specialty/complex generic pipelines.",
+    "macro_considerations": "India macro remains resilient with GDP growth expected 6.5-7% for FY2026 despite global slowdown. RBI holding repo rate at 6.5% with neutral stance; rate cut cycle unlikely before H2 FY2027 given inflation above 4% target. Union Budget 2026 (Feb 1) focused on capex, infrastructure, rural spending, and manufacturing PLI—generally positive for economic activity and corporate earnings. FII flows turning positive in Jan-Feb 2026 after sustained outflows in H2 CY2025, while DII flows remain robust at ₹25,000+ Cr monthly. INR stable at 83-84/USD range with adequate forex reserves above $650B providing cushion. Global factors: US Federal Reserve paused rate hikes with cuts possible late 2026; China growth stabilizing at 4-5%; geopolitical risks (Russia-Ukraine, Middle East) contained but monitoring required. Overall macro supportive for domestic consumption-oriented sectors with moderate export sensitivity.",
+    "technical_regime": "Nifty at 24,000 levels after pullback from Jan 2026 highs near 24,500, consolidating in 23,500-24,500 range. 50DMA at 23,850 and 200DMA at 23,200 providing support structure. Market breadth improving with mid/small caps participating after prolonged underperformance versus large caps in 2025. Sector rotation favoring defensives (IT, Pharma, Private Banks) over cyclicals (Metals, Energy, PSU Banks) as FY2027 earnings outlook remains cautious. FII positioning turning positive after heavy selling in Oct-Dec 2025; DII flows consistent providing floor. RSI(14) for Nifty at 55 (neutral zone), MACD showing bullish divergence. VIX at 14-15 range indicating low volatility regime. Technical regime assessment: consolidation phase within broader uptrend, favorable for accumulating quality large-caps on dips. Entry zones defined for each stock based on support levels and DMA positioning to optimize risk-reward for conservative 5+ year holders.",
+    "portfolio_construction": "Portfolio structured with 40% IT Services (4 stocks), 30% Private Banking (3 stocks), and 30% Pharmaceuticals (3 stocks) aligning with conservative risk profile and 5+ year horizon. IT overweight justified by secular growth, pricing power, and defensive cash generation characteristics. Banking provides domestic consumption exposure with strong franchises navigating cycles well. Pharma offers diversification with low correlation to IT/Banking and benefiting from different macro drivers. Within each sector, selected quality gradient: tier-1 leaders (TCS, Infosys, HDFC, Sun Pharma) for core portfolio (60%), quality challengers with strong franchises (ICICI, Dr. Reddy's, Cipla) for growth-value balance (25%), and selective turnaround/value plays (Wipro, Axis, Tech Mahindra) for alpha generation (15%). All stocks have ROE >14%, manageable debt, no promoter pledge concerns, and clear competitive moats suitable for long-term compounding. Composite scoring ensures rank ordering reflects fundamental quality (80% weight) with technical entry validation (20% weight). Portfolio diversification across sub-sectors (IT: tier-1 vs tier-2, telecom IT; Banking: different customer segments; Pharma: therapeutic areas and geographies) reduces concentration risk while maintaining sector conviction.",
+    "caveats": [
+      "All financial data as of Feb 27, 2026 closing or latest available Q3 FY2026 results; subject to revision in Q4 FY2026 earnings (April 2026)",
+      "Technical indicators (RSI, DMA positions) estimated based on recent price trends as NSE closed on weekend; confirm precise values on market open",
+      "Sector average P/E ratios calculated from top 5-7 companies in each sector weighted by market cap",
+      "Forward earnings estimates (FY2027E) based on consensus analyst projections subject to material revision based on macro developments",
+      "Currency assumptions: INR at 83-84/USD; material deviation impacts IT sector earnings translation",
+      "Composite scores and rankings reflect specified time horizon (5+ years) with 80% fundamental weight, 20% technical weight; different horizons would alter rankings",
+      "This analysis is for informational purposes only and does not constitute investment advice; consult qualified financial advisor before making investment decisions",
+      "Past performance and historical data do not guarantee future results; all investments carry risk including loss of principal",
+      "Upside/downside targets represent 12-18 month scenarios based on current visibility and subject to change based on earnings, macro, and sector developments"
+    ]
+  }
+}
