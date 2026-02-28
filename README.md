@@ -4,6 +4,7 @@ A browser-native AI stock screening tool for NSE-listed Indian equities. No serv
 
 Built as a proof of concept at the intersection of AI-native UX and production-grade financial research tooling.
 
+![Demo](demo.gif)
 
 ---
 
@@ -43,13 +44,13 @@ IndianStockScreener.jsx
 ### Option A — Claude Artifact (no API key needed)
 
 1. Open [claude.ai](https://claude.ai)
-2. Paste the contents of `claude_artifacts/IndianStockScreener.jsx` into a message
+2. Paste the contents of [`claude_artifacts/IndianStockScreener.jsx`](claude_artifacts/IndianStockScreener.jsx) into a message
 3. Claude renders it as an interactive artifact
 4. Select sectors, set your profile, run
 
 ### Option B — Local HTML
 
-1. Download `IndianStockScreener.html`
+1. Download [`IndianStockScreener.html`](IndianStockScreener.html)
 2. Open it in Chrome or Firefox (double-click or drag into browser)
 3. Enter your Anthropic API key when the modal appears
 4. Key is held in `sessionStorage` only — cleared when the tab closes
@@ -189,9 +190,9 @@ No dangling requests. The connection teardown is sufficient — Anthropic stops 
 
 The screener uses two separate prompts per run: a **system prompt** built at call time, and a **user prompt** containing the screening request.
 
-### System Prompt — `buildSystemPrompt()`
+### System Prompt — [`buildSystemPrompt()`](IndianStockScreener.html#L171)
 
-Called fresh on every `run()`. Injects live-computed temporal context so the model is never operating on stale date assumptions.
+Called fresh on every [`run()`](IndianStockScreener.html#L1129). Injects live-computed temporal context so the model is never operating on stale date assumptions.
 
 ```
 SYSTEM PROMPT STRUCTURE
@@ -719,11 +720,11 @@ For production deployment, the fetch calls should be proxied through a lightweig
 
 Two specific risks present in the current implementation:
 
-**API key exposed in browser context** (`IndianStockScreener.html:1518`)
+**API key exposed in browser context** ([`IndianStockScreener.html:1518`](IndianStockScreener.html#L1518))
 
 The key is stored in `sessionStorage` under `_eq_key` and read back on every API call. Any JavaScript running on the same page — a malicious browser extension, an XSS payload, or any injected script — can read it with `sessionStorage.getItem("_eq_key")`. `sessionStorage` is not a secure credential store; it is accessible to all same-origin scripts. This is an acceptable tradeoff for a single-user POC where the key belongs to the person running the tool, but it is not acceptable for any multi-user or shared deployment.
 
-**`window.fetch` global monkey-patching** (`IndianStockScreener.html:1512–1525`)
+**`window.fetch` global monkey-patching** ([`IndianStockScreener.html:1512–1525`](IndianStockScreener.html#L1512))
 
 After the API key is saved, `window.fetch` is overridden to inject auth headers on any request to `api.anthropic.com`. This is a fragile pattern: any third-party script loaded after this point will also have its `api.anthropic.com` calls intercepted and have the key injected. In practice the risk is low (no external scripts in this codebase make Anthropic calls), but it is architecturally untidy and could become a meaningful attack surface if additional scripts are introduced. A cleaner approach is to pass the key explicitly through the call stack rather than patching the global.
 
